@@ -16,6 +16,7 @@ if ROOT_DIR not in sys.path:
 
 import database as db
 from modulos import saving_projetos, estoque, almoxarife, configuracoes
+import compras_modulo
 
 # Inicializa banco de dados e estrutura de tabelas
 try:
@@ -112,7 +113,6 @@ def tela_login():
         _, col_l, col_t, _ = st.columns([0.2, 0.8, 2.2, 0.2])
         
         with col_l:
-            # Puxa uma logo genérica se houver, senão mostra um ícone de caixa
             if os.path.exists("logo_sistema.png"):
                 st.image("logo_sistema.png", width=70)
             else:
@@ -203,12 +203,12 @@ def painel_principal():
     
     perfil_atual = st.session_state["perfil"]
     
-    # Restringe a visualização do menu de Saving apenas para Gestor Geral
     opcoes_menu = []
     if perfil_atual == "Gestão Geral":
         opcoes_menu.append("📊 Saving & Projetos")
         
     opcoes_menu.extend([
+        "🛒 Módulo de Compras",
         "📦 Controle de Estoque",
         "📍 Endereçamento (Almoxarifado)",
         "⚙️ Configurações"
@@ -231,6 +231,8 @@ def painel_principal():
             saving_projetos.render(perfil_atual)
         else:
             st.error("Acesso não autorizado.")
+    elif modulo_sel == "🛒 Módulo de Compras":
+        compras_modulo.render_modulo_compras()
     elif modulo_sel == "📦 Controle de Estoque":
         estoque.render(perfil_atual)
     elif modulo_sel == "📍 Endereçamento (Almoxarifado)":
