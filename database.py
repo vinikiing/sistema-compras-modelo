@@ -4,17 +4,14 @@ import psycopg2
 
 def get_db_connection():
     db_url = "postgresql://postgres:tmJFapQqfvspySMVyEoGShHsEGrsaTvT@kodama.proxy.rlwy.net:24855/railway"
-    
     if not db_url:
         raise ValueError("URL do banco não informada.")
-        
     return psycopg2.connect(db_url, sslmode='require')
 
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Tabela de estoque com a coluna 'codigo' incluída
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS estoque (
             id SERIAL PRIMARY KEY,
@@ -115,46 +112,36 @@ def init_db():
         );
     """)
 
-    # Nova tabela para o Módulo de Compras
+    # Tabela de compras estruturada por número de SC e itens em lote
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS compras (
             id SERIAL PRIMARY KEY,
+            numero_sc INTEGER NOT NULL,
             data_pedido TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             projeto VARCHAR(255) NOT NULL,
             item VARCHAR(255) NOT NULL,
             quantidade NUMERIC(10,2) NOT NULL,
             unidade VARCHAR(20) DEFAULT 'UN',
             fornecedor_sugerido VARCHAR(255),
-            status VARCHAR(50) DEFAULT 'Pendente',
-            solicitante VARCHAR(100)
+            status VARCHAR(100) DEFAULT 'Pendente Aprovação Gestor',
+            solicitante VARCHAR(100),
+            f1_nome VARCHAR(255),
+            f1_preco NUMERIC(12,2) DEFAULT 0.0,
+            f2_nome VARCHAR(255),
+            f2_preco NUMERIC(12,2) DEFAULT 0.0,
+            f3_nome VARCHAR(255),
+            f3_preco NUMERIC(12,2) DEFAULT 0.0,
+            fornecedor_escolhido VARCHAR(255),
+            preco_escolhido NUMERIC(12,2) DEFAULT 0.0
         );
     """)
 
-    # Garante o usuário admin padrão
     cursor.execute("""
         INSERT INTO usuarios (username, password, perfil, e_admin, pode_ver_saving, pode_consultar_estoque, pode_ver_relatorios) 
         VALUES ('admin', '123', 'Administrador', TRUE, TRUE, TRUE, TRUE)
         ON CONFLICT (username) DO NOTHING;
     """)
     conn.commit()
-
-    colunas_novas = [
-        ("estoque", "codigo VARCHAR(100)"),
-        ("estoque", "ultimo_fornecedor VARCHAR(255)"),
-        ("estoque", "data_ultima_compra VARCHAR(50)"),
-        ("lancamentos", "fornecedor VARCHAR(255)"),
-        ("orcamentos", "valor_orcado NUMERIC(12,2) DEFAULT 0.0"),
-        ("orcamentos", "setor VARCHAR(100)"),
-        ("orcamentos", "projeto VARCHAR(255)")
-    ]
-
-    for tabela, col_def in colunas_novas:
-        try:
-            cursor.execute(f"ALTER TABLE {tabela} ADD COLUMN IF NOT EXISTS {col_def};")
-            conn.commit()
-        except Exception:
-            conn.rollback()
-
     cursor.close()
     conn.close()
 
