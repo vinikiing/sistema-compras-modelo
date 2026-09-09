@@ -3,26 +3,30 @@ import streamlit as st
 import psycopg2
 
 def get_db_connection():
-    pg_host = os.getenv("PGHOST")
-    pg_user = os.getenv("PGUSER")
-    pg_password = os.getenv("PGPASSWORD")
-    pg_database = os.getenv("PGDATABASE")
-    pg_port = os.getenv("PGPORT", "5432")
+    db_url = None
     
-    if pg_host and pg_user and pg_password and pg_database:
-        db_url = f"postgresql://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_database}"
-    else:
-        db_url = os.getenv("DATABASE_URL")
-        
+    # Varre todas as variáveis de ambiente do Railway procurando por uma URL do Postgres
+    for key, value in os.environ.items():
+        if value and isinstance(value, str) and value.startswith("postgresql://"):
+            db_url = value
+            break
+            
+    # Fallback para o Streamlit Secrets caso esteja testando local
     if not db_url:
-        raise ValueError("Banco não conectado! Certifique-se de que o Postgres está vinculado ao aplicativo no Railway.")
+        try:
+            db_url = st.secrets["DATABASE_URL"]
+        except Exception:
+            pass
+            
+    if not db_url:
+        raise ValueError("Nenhuma URL do Postgres encontrada nas variáveis de ambiente.")
         
     return psycopg2.connect(db_url, sslmode='require')
+
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Tabela de estoque físico
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS estoque (
             id SERIAL PRIMARY KEY,
@@ -38,7 +42,6 @@ def init_db():
         );
     """)
 
-    # Tabela de orçamentos por projeto (Saving)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS orcamentos (
             id SERIAL PRIMARY KEY,
@@ -48,7 +51,6 @@ def init_db():
         );
     """)
 
-    # Tabela de lançamentos/compras do projeto (Saving)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS lancamentos (
             id SERIAL PRIMARY KEY,
@@ -62,7 +64,6 @@ def init_db():
         );
     """)
 
-    # Tabela de Centros de Custo
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS centros_custo (
             id SERIAL PRIMARY KEY,
@@ -70,7 +71,6 @@ def init_db():
         );
     """)
 
-    # Tabela de De-Para
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS depara_fornecedor (
             id SERIAL PRIMARY KEY,
@@ -82,7 +82,6 @@ def init_db():
         );
     """)
 
-    # Tabela de usuários
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id SERIAL PRIMARY KEY,
@@ -103,7 +102,6 @@ def init_db():
         );
     """)
 
-    # Tabela de histórico de movimentações no estoque
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS historico_estoque (
             id SERIAL PRIMARY KEY,
@@ -119,7 +117,6 @@ def init_db():
         );
     """)
 
-    # Tabela de histórico de logins
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS historico_logins (
             id SERIAL PRIMARY KEY,
@@ -129,7 +126,6 @@ def init_db():
         );
     """)
 
-    # GARANTIA DE COLUNAS EM TABELAS JÁ EXISTENTES
     colunas_novas = [
         ("estoque", "ultimo_fornecedor VARCHAR(255)"),
         ("estoque", "data_ultima_compra VARCHAR(50)"),
