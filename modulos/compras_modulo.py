@@ -148,32 +148,47 @@ def render_modulo_compras():
                     conn, params=(sc_selecionada,)
                 )
                 
-                st.markdown(f"**Defina os 3 Fornecedores da SC #{sc_selecionada:04d}:**")
+                st.markdown(f"**Condições Comerciais e Propostas dos 3 Fornecedores da SC #{sc_selecionada:04d}:**")
                 
                 default_f1 = df_itens_cot["f1_nome"].iloc[0] if not df_itens_cot.empty and df_itens_cot["f1_nome"].iloc[0] else ""
+                default_p1 = int(df_itens_cot["f1_prazo"].iloc[0]) if not df_itens_cot.empty and df_itens_cot["f1_prazo"].iloc[0] else 0
+                default_fr1 = float(df_itens_cot["f1_frete"].iloc[0]) if not df_itens_cot.empty and df_itens_cot["f1_frete"].iloc[0] else 0.0
+
                 default_f2 = df_itens_cot["f2_nome"].iloc[0] if not df_itens_cot.empty and df_itens_cot["f2_nome"].iloc[0] else ""
+                default_p2 = int(df_itens_cot["f2_prazo"].iloc[0]) if not df_itens_cot.empty and df_itens_cot["f2_prazo"].iloc[0] else 0
+                default_fr2 = float(df_itens_cot["f2_frete"].iloc[0]) if not df_itens_cot.empty and df_itens_cot["f2_frete"].iloc[0] else 0.0
+
                 default_f3 = df_itens_cot["f3_nome"].iloc[0] if not df_itens_cot.empty and df_itens_cot["f3_nome"].iloc[0] else ""
+                default_p3 = int(df_itens_cot["f3_prazo"].iloc[0]) if not df_itens_cot.empty and df_itens_cot["f3_prazo"].iloc[0] else 0
+                default_fr3 = float(df_itens_cot["f3_frete"].iloc[0]) if not df_itens_cot.empty and df_itens_cot["f3_frete"].iloc[0] else 0.0
                 
                 col_f1, col_f2, col_f3 = st.columns(3)
                 with col_f1:
-                    sup1_nome = st.text_input("🏢 Nome do Fornecedor 1", value=default_f1, key=f"sup1_{sc_selecionada}")
+                    st.markdown("##### 🏢 Fornecedor 1")
+                    sup1_nome = st.text_input("Nome F1", value=default_f1, key=f"sup1_{sc_selecionada}")
+                    sup1_prazo = st.number_input("Prazo de Entrega (Dias)", min_value=0, value=default_p1, key=f"p1_{sc_selecionada}")
+                    sup1_frete = st.number_input("Valor do Frete (R$)", min_value=0.0, value=default_fr1, format="R$ %.2f", key=f"fr1_{sc_selecionada}")
                 with col_f2:
-                    sup2_nome = st.text_input("🏢 Nome do Fornecedor 2", value=default_f2, key=f"sup2_{sc_selecionada}")
+                    st.markdown("##### 🏢 Fornecedor 2")
+                    sup2_nome = st.text_input("Nome F2", value=default_f2, key=f"sup2_{sc_selecionada}")
+                    sup2_prazo = st.number_input("Prazo de Entrega (Dias)", min_value=0, value=default_p2, key=f"p2_{sc_selecionada}")
+                    sup2_frete = st.number_input("Valor do Frete (R$)", min_value=0.0, value=default_fr2, format="R$ %.2f", key=f"fr2_{sc_selecionada}")
                 with col_f3:
-                    sup3_nome = st.text_input("🏢 Nome do Fornecedor 3", value=default_f3, key=f"sup3_{sc_selecionada}")
+                    st.markdown("##### 🏢 Fornecedor 3")
+                    sup3_nome = st.text_input("Nome F3", value=default_f3, key=f"sup3_{sc_selecionada}")
+                    sup3_prazo = st.number_input("Prazo de Entrega (Dias)", min_value=0, value=default_p3, key=f"p3_{sc_selecionada}")
+                    sup3_frete = st.number_input("Valor do Frete (R$)", min_value=0.0, value=default_fr3, format="R$ %.2f", key=f"fr3_{sc_selecionada}")
                 
                 st.markdown("---")
-                st.markdown("**Preencha os preços, prazos e fretes para cada item abaixo:**")
-                st.caption("ℹ️ Itens que ficarem sem os dados completos em qualquer um dos 3 fornecedores continuarão pendentes nesta SC para posterior finalização.")
+                st.markdown("**Preencha apenas os preços unitários para cada item abaixo:**")
+                st.caption("ℹ️ Itens que ficarem sem preço em qualquer um dos 3 fornecedores continuarão pendentes nesta SC para posterior finalização.")
                 
                 df_editavel = df_itens_cot.copy()
                 
                 edited_df = st.data_editor(
                     df_editavel[[
                         "id", "item", "quantidade", "unidade", 
-                        "f1_preco", "f1_prazo", "f1_frete", 
-                        "f2_preco", "f2_prazo", "f2_frete", 
-                        "f3_preco", "f3_prazo", "f3_frete"
+                        "f1_preco", "f2_preco", "f3_preco"
                     ]],
                     column_config={
                         "id": st.column_config.NumberColumn("ID", disabled=True),
@@ -181,14 +196,8 @@ def render_modulo_compras():
                         "quantidade": st.column_config.NumberColumn("Qtd", disabled=True),
                         "unidade": st.column_config.TextColumn("Un", disabled=True),
                         "f1_preco": st.column_config.NumberColumn("Preço F1 (R$)", min_value=0.0, format="R$ %.2f"),
-                        "f1_prazo": st.column_config.NumberColumn("Prazo F1 (Dias)", min_value=0),
-                        "f1_frete": st.column_config.NumberColumn("Frete F1 (R$)", min_value=0.0, format="R$ %.2f"),
                         "f2_preco": st.column_config.NumberColumn("Preço F2 (R$)", min_value=0.0, format="R$ %.2f"),
-                        "f2_prazo": st.column_config.NumberColumn("Prazo F2 (Dias)", min_value=0),
-                        "f2_frete": st.column_config.NumberColumn("Frete F2 (R$)", min_value=0.0, format="R$ %.2f"),
                         "f3_preco": st.column_config.NumberColumn("Preço F3 (R$)", min_value=0.0, format="R$ %.2f"),
-                        "f3_prazo": st.column_config.NumberColumn("Prazo F3 (Dias)", min_value=0),
-                        "f3_frete": st.column_config.NumberColumn("Frete F3 (R$)", min_value=0.0, format="R$ %.2f"),
                     },
                     hide_index=True,
                     key=f"editor_sc_{sc_selecionada}"
@@ -196,7 +205,7 @@ def render_modulo_compras():
                 
                 if st.button("💾 Salvar e Processar Itens Concluídos", type="primary"):
                     if not sup1_nome or not sup2_nome or not sup3_nome:
-                        st.error("⚠️ Por favor, informe o nome dos 3 fornecedores nos campos acima antes de salvar.")
+                        st.error("⚠️ Por favor, informe o nome dos 3 fornecedores nos campos acima.")
                     else:
                         try:
                             cursor = conn.cursor()
@@ -217,9 +226,9 @@ def render_modulo_compras():
                                             status = 'Aguardando Escolha do Gestor da Área'
                                         WHERE id = %s;
                                     """, (
-                                        sup1_nome, row["f1_preco"], row["f1_prazo"], row["f1_frete"],
-                                        sup2_nome, row["f2_preco"], row["f2_prazo"], row["f2_frete"],
-                                        sup3_nome, row["f3_preco"], row["f3_prazo"], row["f3_frete"],
+                                        sup1_nome, row["f1_preco"], sup1_prazo, sup1_frete,
+                                        sup2_nome, row["f2_preco"], sup2_prazo, sup2_frete,
+                                        sup3_nome, row["f3_preco"], sup3_prazo, sup3_frete,
                                         row["id"]
                                     ))
                                     itens_concluidos_count += 1
@@ -231,9 +240,9 @@ def render_modulo_compras():
                                             f3_nome = %s, f3_preco = %s, f3_prazo = %s, f3_frete = %s
                                         WHERE id = %s;
                                     """, (
-                                        sup1_nome, row["f1_preco"], row["f1_prazo"], row["f1_frete"],
-                                        sup2_nome, row["f2_preco"], row["f2_prazo"], row["f2_frete"],
-                                        sup3_nome, row["f3_preco"], row["f3_prazo"], row["f3_frete"],
+                                        sup1_nome, row["f1_preco"], sup1_prazo, sup1_frete,
+                                        sup2_nome, row["f2_preco"], sup2_prazo, sup2_frete,
+                                        sup3_nome, row["f3_preco"], sup3_prazo, sup3_frete,
                                         row["id"]
                                     ))
                                     
@@ -340,14 +349,14 @@ def render_modulo_compras():
                 for idx, sc_row in df_ger.iterrows():
                     with st.expander(f"SC #{sc_row['numero_sc']:04d} | Projeto: {sc_row['projeto']} | Solicitante: {sc_row['solicitante']}"):
                         df_itens_ger = pd.read_sql_query(
-                            "SELECT item, quantidade, unidade, fornecedor_escolhido, preco_escolhido, f1_nome, f1_preco, f1_prazo, f2_nome, f2_preco, f2_prazo, f3_nome, f3_preco, f3_prazo FROM compras WHERE numero_sc = %s AND status = 'Aguardando Aprovação Gerente Geral'", 
+                            "SELECT item, quantidade, unidade, fornecedor_escolhido, preco_escolhido, f1_nome, f1_preco, f1_prazo, f1_frete, f2_nome, f2_preco, f2_prazo, f2_frete, f3_nome, f3_preco, f3_prazo, f3_frete FROM compras WHERE numero_sc = %s AND status = 'Aguardando Aprovação Gerente Geral'", 
                             conn, params=(sc_row['numero_sc'],)
                         )
                         
                         for _, r in df_itens_ger.iterrows():
                             st.markdown(f"📦 **{r['item']}** ({r['quantidade']} {r['unidade']})")
                             st.markdown(f"👉 **Escolhido:** `{r['fornecedor_escolhido']}` por `R$ {r['preco_escolhido']:.2f}`")
-                            st.caption(f"Comparativo: [1] {r['f1_nome']} (R$ {r['f1_preco']:.2f} / {r['f1_prazo']}d) | [2] {r['f2_nome']} (R$ {r['f2_preco']:.2f} / {r['f2_prazo']}d) | [3] {r['f3_nome']} (R$ {r['f3_preco']:.2f} / {r['f3_prazo']}d)")
+                            st.caption(f"Comparativo: [1] {r['f1_nome']} (R$ {r['f1_preco']:.2f} | {r['f1_prazo']}d | R$ {r['f1_frete']:.2f}) | [2] {r['f2_nome']} (R$ {r['f2_preco']:.2f} | {r['f2_prazo']}d | R$ {r['f2_frete']:.2f}) | [3] {r['f3_nome']} (R$ {r['f3_preco']:.2f} | {r['f3_prazo']}d | R$ {r['f3_frete']:.2f})")
                             st.markdown("---")
                         
                         col_fin1, col_fin2 = st.columns(2)
