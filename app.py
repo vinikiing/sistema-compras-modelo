@@ -2,10 +2,10 @@ import os
 import sys
 import streamlit as st
 
-# Configuração da página Streamlit com a sua Logo Delta como Favicon
+# Configuração da página Streamlit (Agora White-Label)
 st.set_page_config(
-    page_title="Portal Delta - Suprimentos & Estoque",
-    page_icon="logo_delta.png",
+    page_title="Portal Gestão Pro - Compras & Estoque",
+    page_icon="📦",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -112,11 +112,14 @@ def tela_login():
         _, col_l, col_t, _ = st.columns([0.2, 0.8, 2.2, 0.2])
         
         with col_l:
-            if os.path.exists("logo_delta.png"):
-                st.image("logo_delta.png", width=70)
+            # Puxa uma logo genérica se houver, senão mostra um ícone de caixa
+            if os.path.exists("logo_sistema.png"):
+                st.image("logo_sistema.png", width=70)
+            else:
+                st.markdown("<h1 style='margin:0px;'>📦</h1>", unsafe_allow_html=True)
                 
         with col_t:
-            st.markdown("<h2 style='color: #38bdf8; margin: 0px; line-height: 1.1;'>Portal Delta</h2>", unsafe_allow_html=True)
+            st.markdown("<h2 style='color: #38bdf8; margin: 0px; line-height: 1.1;'>Portal Gestão Pro</h2>", unsafe_allow_html=True)
             st.markdown("<p style='color: #94a3b8; margin: 0px; font-size: 13px;'>Suprimentos & Estoque</p>", unsafe_allow_html=True)
         
         st.write("") # Espaçamento leve
