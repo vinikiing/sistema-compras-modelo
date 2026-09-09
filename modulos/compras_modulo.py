@@ -417,7 +417,7 @@ def render_modulo_compras():
                             forn_atual = df_itens_po["fornecedor_escolhido"].iloc[0]
                             data_ped = pd.to_datetime(df_itens_po["data_pedido"].iloc[0]).strftime("%d/%m/%Y")
                             
-                            # Dados fictícios e genéricos para o comprador e fornecedor
+                            # Dados fictícios e genéricos da empresa compradora e do fornecedor
                             cnpj_emitente = "45.123.789/0001-99"
                             ie_emitente = "998877665"
                             endereco_emitente = "Rodovia Central, 500, Galpão A, Distrito Industrial, São Paulo - SP"
@@ -472,8 +472,82 @@ def render_modulo_compras():
                             Entrega conforme especificado no processo de cotação.
                             """)
                             
-                            if st.button("Imprimir / Salvar Pedido de Compra", type="primary"):
-                                st.success(f"Pedido de Compra referente à SC #{sc_po:04d} gerado com sucesso!")
+                            # Geração de arquivo HTML formatado para download real e impressão em PDF
+                            po_numero = sc_po + 1600
+                            html_content = f"""
+                            <!DOCTYPE html>
+                            <html>
+                            <head>
+                                <meta charset="utf-8">
+                                <title>Pedido de Compra #{po_numero}</title>
+                                <style>
+                                    body {{ font-family: Arial, sans-serif; margin: 40px; color: #333; }}
+                                    h2, h3 {{ color: #111; }}
+                                    .header, .section {{ margin-bottom: 20px; }}
+                                    table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
+                                    th, td {{ border: 1px solid #ccc; padding: 10px; text-align: left; font-size: 14px; }}
+                                    th {{ background-color: #f4f4f4; }}
+                                    .totals {{ margin-top: 20px; text-align: right; font-size: 15px; }}
+                                </style>
+                            </head>
+                            <body>
+                                <h2>Pedido de Compra N° {po_numero}</h2>
+                                <div class="header">
+                                    <strong>Comprador:</strong> {nome_comprador}<br>
+                                    CNPJ: {cnpj_emitente} | IE: {ie_emitente}<br>
+                                    Endereço: {endereco_emitente}
+                                </div>
+                                <hr>
+                                <div class="section">
+                                    <strong>Fornecedor:</strong> {forn_atual}<br>
+                                    CNPJ: {cnpj_forn}<br>
+                                    Endereço: {end_forn}<br>
+                                    Telefone: {tel_forn}
+                                </div>
+                                <p><strong>Data do Pedido:</strong> {data_ped} &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Condição de Pagamento:</strong> 30 dias</p>
+                                
+                                <h3>Itens do Pedido</h3>
+                                <table>
+                                    <tr>
+                                        <th>Descrição do produto/serviço</th>
+                                        <th>Un</th>
+                                        <th>Qtde</th>
+                                        <th>Valor Unitário (R$)</th>
+                                        <th>Valor Total (R$)</th>
+                                    </tr>
+                            """
+                            
+                            for _, r in df_itens_po.iterrows():
+                                val_tot = r['quantidade'] * r['preco_escolhido']
+                                html_content += f"""
+                                    <tr>
+                                        <td>{r['item']}</td>
+                                        <td>{r['unidade']}</td>
+                                        <td>{r['quantidade']:,.2f}</td>
+                                        <td>R$ {r['preco_escolhido']:,.2f}</td>
+                                        <td>R$ {val_tot:,.2f}</td>
+                                    </tr>
+                                """
+                            
+                            html_content += f"""
+                                </table>
+                                <div class="totals">
+                                    <p><strong>Soma das Quantidades:</strong> {soma_qtd:,.2f}</p>
+                                    <p><strong>Total do Pedido:</strong> R$ {total_geral:,.2f}</p>
+                                </div>
+                                <p><strong>Observações:</strong> Entrega conforme especificado no processo de cotação.</p>
+                            </body>
+                            </html>
+                            """
+                            
+                            st.download_button(
+                                label="Baixar Pedido de Compra (HTML para Impressão/PDF)",
+                                data=html_content,
+                                file_name=f"Pedido_Compra_{po_numero}.html",
+                                mime="text/html",
+                                type="primary",
+                                key=f"download_po_btn_{sc_po}"
+                            )
         except Exception as e:
             st.error(f"Erro ao carregar status das SCs: {e}")
             
