@@ -114,6 +114,14 @@ def init_db():
         );
     """)
 
+    # Cria automaticamente o usuário admin padrão se ele não existir
+    cursor.execute("""
+        INSERT INTO usuarios (username, password, perfil, e_admin, pode_ver_saving, pode_consultar_estoque, pode_ver_relatorios) 
+        VALUES ('admin', '123', 'Administrador', TRUE, TRUE, TRUE, TRUE)
+        ON CONFLICT (username) DO NOTHING;
+    """)
+    conn.commit()
+
     colunas_novas = [
         ("estoque", "ultimo_fornecedor VARCHAR(255)"),
         ("estoque", "data_ultima_compra VARCHAR(50)"),
