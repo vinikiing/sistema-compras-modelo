@@ -3,7 +3,6 @@ import streamlit as st
 import psycopg2
 
 def get_db_connection():
-    # URL direta atualizada do seu Postgres no Railway
     db_url = "postgresql://postgres:tmJFapQqfvspySMVyEoGShHsEGrsaTvT@kodama.proxy.rlwy.net:24855/railway"
     
     if not db_url:
@@ -15,9 +14,11 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # Tabela de estoque com a coluna 'codigo' incluída
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS estoque (
             id SERIAL PRIMARY KEY,
+            codigo VARCHAR(100),
             item VARCHAR(255) NOT NULL,
             localizacao VARCHAR(255) NOT NULL,
             setor_categoria VARCHAR(100),
@@ -114,7 +115,22 @@ def init_db():
         );
     """)
 
-    # Cria automaticamente o usuário admin padrão se ele não existir
+    # Nova tabela para o Módulo de Compras
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS compras (
+            id SERIAL PRIMARY KEY,
+            data_pedido TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            projeto VARCHAR(255) NOT NULL,
+            item VARCHAR(255) NOT NULL,
+            quantidade NUMERIC(10,2) NOT NULL,
+            unidade VARCHAR(20) DEFAULT 'UN',
+            fornecedor_sugerido VARCHAR(255),
+            status VARCHAR(50) DEFAULT 'Pendente',
+            solicitante VARCHAR(100)
+        );
+    """)
+
+    # Garante o usuário admin padrão
     cursor.execute("""
         INSERT INTO usuarios (username, password, perfil, e_admin, pode_ver_saving, pode_consultar_estoque, pode_ver_relatorios) 
         VALUES ('admin', '123', 'Administrador', TRUE, TRUE, TRUE, TRUE)
@@ -123,6 +139,7 @@ def init_db():
     conn.commit()
 
     colunas_novas = [
+        ("estoque", "codigo VARCHAR(100)"),
         ("estoque", "ultimo_fornecedor VARCHAR(255)"),
         ("estoque", "data_ultima_compra VARCHAR(50)"),
         ("lancamentos", "fornecedor VARCHAR(255)"),
