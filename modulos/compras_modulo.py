@@ -5,11 +5,11 @@ from database import get_db_connection, obter_opcoes_destino
 def render_modulo_compras():
     st.header("🛒 Módulo de Compras")
     
-    # Adicionamos a aba de cotações ao fluxo
-    aba_solicitacao, aba_aprovacao, aba_cotacao = st.tabs([
+    aba_solicitacao, aba_aprovacao_gestor, aba_cotacao, aba_aprovacao_final = st.tabs([
         "📝 Nova Solicitação", 
-        "👀 Aprovação do Gestor", 
-        "💰 Cotações (Compras)"
+        "👀 1ª Aprovação (Gestor)", 
+        "💰 Cotações (Compras)",
+        "👑 Aprovação Final (Gestor + Diretoria)"
     ])
     
     conn = get_db_connection()
@@ -49,8 +49,8 @@ def render_modulo_compras():
                         conn.rollback()
                         st.error(f"Erro ao salvar solicitação: {e}")
 
-    with aba_aprovacao:
-        st.subheader("Aprovações Pendentes (Gestor)")
+    with aba_aprovacao_gestor:
+        st.subheader("Aprovações Pendentes (Gestor da Área)")
         try:
             df_pendentes = pd.read_sql_query(
                 "SELECT id, data_pedido, projeto, item, quantidade, unidade, fornecedor_sugerido, solicitante FROM compras WHERE status = 'Pendente Aprovação Gestor'", 
@@ -58,7 +58,7 @@ def render_modulo_compras():
             )
             
             if df_pendentes.empty:
-                st.info("Nenhuma solicitação pendente no momento.")
+                st.info("Nenhuma solicitação pendente para o gestor no momento.")
             else:
                 st.dataframe(df_pendentes, use_container_width=True)
                 id_aprovar = st.selectbox("Selecione o ID da Solicitação para Ação", options=df_pendentes["id"].tolist(), key="apr_gestor")
@@ -106,7 +106,6 @@ def render_modulo_compras():
                 st.dataframe(df_cotacoes, use_container_width=True)
                 id_cotar = st.selectbox("Selecione o ID do Item para Inserir Cotações", options=df_cotacoes["id"].tolist(), key="sel_cotacao")
                 
-                # Exibe detalhes do item selecionado
                 item_selecionado = df_cotacoes[df_cotacoes["id"] == id_cotar].iloc[0]
                 st.info(f"Cotando para: **{item_selecionado['item']}** ({item_selecionado['quantidade']} {item_selecionado['unidade']}) - Projeto: {item_selecionado['projeto']}")
                 
@@ -135,7 +134,6 @@ def render_modulo_compras():
                         else:
                             try:
                                 cursor = conn.cursor()
-                                # Aqui salvamos o resumo das cotações e mudamos o status para a aprovação final dupla
                                 resumo_cotacoes = f"F1: {f1_nome} (R$ {f1_preco}) | F2: {f2_nome} (R$ {f2_preco}) | F3: {f3_nome} (R$ {f3_preco})"
                                 cursor.execute("""
                                     UPDATE compras 
@@ -144,12 +142,59 @@ def render_modulo_compras():
                                 """, (resumo_cotacoes, id_cotar))
                                 conn.commit()
                                 cursor.close()
-                                st.success("🎉 Cotações registradas e enviadas para Aprovação Final da Diretoria e Gestor!")
+                                st.success("🎉 Cotações registradas e enviadas para Aprovação Final!")
                                 st.rerun()
                             except Exception as e:
                                 conn.rollback()
                                 st.error(f"Erro ao salvar cotações: {e}")
         except Exception as e:
             st.error(f"Erro ao carregar cotações: {e}")
+
+    with aba_aprovacao_final:
+        st.subheader("Aprovação Final de Cotações (Gestor + Diretoria)")
+        try:
+            df_final = pd.read_sql_query(
+                "SELECT id, projeto, item, quantidade, unidade, fornecedor_sugerido, solicitante FROM compras WHERE status = 'Aguardando Aprovação Final (Gestor + Diretoria)'", 
+                conn
+            )
+            
+            if df_final.empty:
+                st.info("Nenhuma cotação aguardando aprovação final no momento.")
+            else:
+                st.dataframe(df_final, use_container_width=True)
+                id_final = st.selectbox("Selecione o ID para Avaliar Cotações", options=df_final["id"].tolist(), key="sel_apr_final")
+                
+                item_final = df_final[df_final["id"] == id_final].iloc[0]
+                st.markdown(f"**Item:** {item_final['item']} | **Qtd:** {item_final['quantidade']} {item_final['unidade']} | **Projeto:** {item_final['projeto']}")
+                st.warning(f"📋 **Cotações Recebidas:**\n\n {item_final['fornecedor_sugerido']}")
+                
+                col_f1, col_f2 = st.columns(2)
+                with col_f1:
+                    if st.button("✅ Aprovar Definitivamente (Gerar Pedido)", type="primary", key="btn_aprov_final"):
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE compras SET status = 'Aprovado - Pronto para Emitir Pedido' WHERE id = %s;", (id_final,))
+                            conn.commit()
+                            cursor.close()
+                            st.success(f"Cotação #{id_final} aprovada pela Diretoria/Gestor! Liberado para emissão do Pedido de Compras.")
+                            st.rerun()
+                        except Exception as e:
+                            conn.rollback()
+                            st.error(f"Erro ao aprovar final: {e}")
+                            
+                with col_f2:
+                    if st.button("❌ Reprovar Cotações", key="btn_repro_final"):
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE compras SET status = 'Cotação Reprovada - Retorna ao Compras' WHERE id = %s;", (id_final,))
+                            conn.commit()
+                            cursor.close()
+                            st.warning(f"Cotação #{id_final} reprovada e retornada para revisão do compras.")
+                            st.rerun()
+                        except Exception as e:
+                            conn.rollback()
+                            st.error(f"Erro ao reprovar: {e}")
+        except Exception as e:
+            st.error(f"Erro ao carregar aprovação final: {e}")
             
     conn.close()
