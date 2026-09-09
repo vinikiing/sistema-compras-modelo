@@ -1,10 +1,17 @@
-import os
-import streamlit as st
-import psycopg2
-
 def get_db_connection():
-    # Pega primeiro do Railway (variável de ambiente), senão tenta do st.secrets
     db_url = os.getenv("DATABASE_URL")
+    
+    # Se o DATABASE_URL vier vazio, monta a string usando as variáveis individuais do Postgres
+    if not db_url or db_url.strip() == "":
+        pg_host = os.getenv("PGHOST")
+        pg_user = os.getenv("PGUSER")
+        pg_password = os.getenv("PGPASSWORD")
+        pg_database = os.getenv("PGDATABASE")
+        pg_port = os.getenv("PGPORT", "5432")
+        
+        if pg_host and pg_user and pg_password and pg_database:
+            db_url = f"postgresql://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_database}"
+            
     if not db_url:
         try:
             db_url = st.secrets["DATABASE_URL"]
