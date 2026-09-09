@@ -142,12 +142,25 @@ def init_db():
     """)
     conn.commit()
 
-    # Garante que a coluna numero_sc exista mesmo se a tabela já existia antes
-    try:
-        cursor.execute("ALTER TABLE compras ADD COLUMN IF NOT EXISTS numero_sc INTEGER DEFAULT 1;")
-        conn.commit()
-    except Exception:
-        conn.rollback()
+    # Garante todas as colunas necessárias na tabela compras caso ela já existisse sem elas
+    colunas_compras = [
+        ("numero_sc", "INTEGER DEFAULT 1"),
+        ("f1_nome", "VARCHAR(255)"),
+        ("f1_preco", "NUMERIC(12,2) DEFAULT 0.0"),
+        ("f2_nome", "VARCHAR(255)"),
+        ("f2_preco", "NUMERIC(12,2) DEFAULT 0.0"),
+        ("f3_nome", "VARCHAR(255)"),
+        ("f3_preco", "NUMERIC(12,2) DEFAULT 0.0"),
+        ("fornecedor_escolhido", "VARCHAR(255)"),
+        ("preco_escolhido", "NUMERIC(12,2) DEFAULT 0.0")
+    ]
+
+    for col_nome, col_tipo in colunas_compras:
+        try:
+            cursor.execute(f"ALTER TABLE compras ADD COLUMN IF NOT EXISTS {col_nome} {col_tipo};")
+            conn.commit()
+        except Exception:
+            conn.rollback()
 
     cursor.close()
     conn.close()
