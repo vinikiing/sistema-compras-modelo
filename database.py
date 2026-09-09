@@ -112,11 +112,10 @@ def init_db():
         );
     """)
 
-    # Tabela de compras estruturada por número de SC e itens em lote
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS compras (
             id SERIAL PRIMARY KEY,
-            numero_sc INTEGER NOT NULL,
+            numero_sc INTEGER DEFAULT 1,
             data_pedido TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             projeto VARCHAR(255) NOT NULL,
             item VARCHAR(255) NOT NULL,
@@ -142,6 +141,14 @@ def init_db():
         ON CONFLICT (username) DO NOTHING;
     """)
     conn.commit()
+
+    # Garante que a coluna numero_sc exista mesmo se a tabela já existia antes
+    try:
+        cursor.execute("ALTER TABLE compras ADD COLUMN IF NOT EXISTS numero_sc INTEGER DEFAULT 1;")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
     cursor.close()
     conn.close()
 
