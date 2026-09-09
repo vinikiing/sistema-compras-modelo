@@ -167,17 +167,17 @@ def render_modulo_compras():
                     st.markdown("##### 🏢 Fornecedor 1")
                     sup1_nome = st.text_input("Nome F1", value=default_f1, key=f"sup1_{sc_selecionada}")
                     sup1_prazo = st.number_input("Prazo de Entrega (Dias)", min_value=0, value=default_p1, key=f"p1_{sc_selecionada}")
-                    sup1_frete = st.number_input("Valor do Frete (R$)", min_value=0.0, value=default_fr1, format="R$ %.2f", key=f"fr1_{sc_selecionada}")
+                    sup1_frete = st.number_input("Valor do Frete (R$)", min_value=0.0, value=default_fr1, format="%.2f", key=f"fr1_{sc_selecionada}")
                 with col_f2:
                     st.markdown("##### 🏢 Fornecedor 2")
                     sup2_nome = st.text_input("Nome F2", value=default_f2, key=f"sup2_{sc_selecionada}")
                     sup2_prazo = st.number_input("Prazo de Entrega (Dias)", min_value=0, value=default_p2, key=f"p2_{sc_selecionada}")
-                    sup2_frete = st.number_input("Valor do Frete (R$)", min_value=0.0, value=default_fr2, format="R$ %.2f", key=f"fr2_{sc_selecionada}")
+                    sup2_frete = st.number_input("Valor do Frete (R$)", min_value=0.0, value=default_fr2, format="%.2f", key=f"fr2_{sc_selecionada}")
                 with col_f3:
                     st.markdown("##### 🏢 Fornecedor 3")
                     sup3_nome = st.text_input("Nome F3", value=default_f3, key=f"sup3_{sc_selecionada}")
                     sup3_prazo = st.number_input("Prazo de Entrega (Dias)", min_value=0, value=default_p3, key=f"p3_{sc_selecionada}")
-                    sup3_frete = st.number_input("Valor do Frete (R$)", min_value=0.0, value=default_fr3, format="R$ %.2f", key=f"fr3_{sc_selecionada}")
+                    sup3_frete = st.number_input("Valor do Frete (R$)", min_value=0.0, value=default_fr3, format="%.2f", key=f"fr3_{sc_selecionada}")
                 
                 st.markdown("---")
                 st.markdown("**Preencha apenas os preços unitários para cada item abaixo:**")
