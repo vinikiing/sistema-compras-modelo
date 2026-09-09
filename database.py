@@ -3,32 +3,35 @@ import streamlit as st
 import psycopg2
 
 def get_db_connection():
-    # Pega automaticamente as credenciais injetadas pelo vínculo nativo do Railway
-    pg_host = os.getenv("PGHOST")
-    pg_user = os.getenv("PGUSER")
-    pg_password = os.getenv("PGPASSWORD")
-    pg_database = os.getenv("PGDATABASE")
-    pg_port = os.getenv("PGPORT", "5432")
+    db_url = None
     
-    if pg_host and pg_user and pg_password and pg_database:
-        db_url = f"postgresql://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_database}"
-    else:
-        # Varre o ambiente caso encontre alguma outra URL
-        db_url = None
-        for key, value in os.environ.items():
-            if value and isinstance(value, str) and value.startswith("postgresql://"):
-                db_url = value
+    # 1. Varre tudo procurando por qualquer link do postgres
+    for key, value in os.environ.items():
+        if value and isinstance(value, str) and (value.startswith("postgresql://") or value.startswith("postgres://")):
+            db_url = value
+            break
+            
+    # 2. Tenta nomes comuns de variáveis
+    if not db_url:
+        for env_name in ["DATABASE_URL", "DATABASE_PUBLIC_URL", "POSTGRES_URL", "PG_URL"]:
+            val = os.getenv(env_name)
+            if val:
+                db_url = val
                 break
                 
-    # Fallback para testes locais via Streamlit Secrets
+    # 3. Fallback para secrets locais
     if not db_url:
         try:
             db_url = st.secrets["DATABASE_URL"]
         except Exception:
             pass
             
+    # Se continuar sem achar, mostra o que tem no ambiente direto na tela do site!
     if not db_url:
-        raise ValueError("Banco não conectado! Verifique se o Postgres está vinculado ao aplicativo no Railway.")
+        st.error("🚨 Nenhuma URL de banco encontrada!")
+        st.write("Aqui estão todas as chaves de ambiente que o Railway injetou no app:")
+        st.json(dict(os.environ))
+        raise ValueError("Banco não conectado! Veja a lista de variáveis acima.")
         
     return psycopg2.connect(db_url, sslmode='require')
 
