@@ -1,14 +1,20 @@
 import os
-import psycopg2
 import streamlit as st
+import psycopg2
 
 def get_db_connection():
+    # Pega primeiro do Railway (variável de ambiente), senão tenta do st.secrets
     db_url = os.getenv("DATABASE_URL")
-    if not db_url and "postgres" in st.secrets:
-        db_url = st.secrets["postgres"]["url"]
-    
-    conn = psycopg2.connect(db_url)
-    return conn
+    if not db_url:
+        try:
+            db_url = st.secrets["DATABASE_URL"]
+        except Exception:
+            pass
+            
+    if not db_url:
+        raise ValueError("DATABASE_URL não configurada!")
+        
+    return psycopg2.connect(db_url, sslmode='require')
 
 def init_db():
     conn = get_db_connection()
