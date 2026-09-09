@@ -3,14 +3,14 @@ import pandas as pd
 from database import get_db_connection, obter_opcoes_destino
 
 def render_modulo_compras():
-    st.header("🛒 Módulo de Compras por Solicitação (SC)")
+    st.header("Módulo de Compras")
     
     aba_solicitacao, aba_aprov_gestor, aba_cotacao, aba_escolha_gestor, aba_aprov_gerente = st.tabs([
-        "📝 Nova Solicitação (SC)", 
-        "👀 1ª Aprovação (Gestor)", 
-        "💰 Cotações e Propostas",
-        "🎯 Escolha do Fornecedor",
-        "👑 Aprovação Executiva (Gerência)"
+        "Nova Solicitação", 
+        "Aprovação Gestor", 
+        "Cotações",
+        "Aprovação Gestor Nível 1",
+        "Aprovação Nível 2"
     ])
     
     conn = get_db_connection()
@@ -19,7 +19,7 @@ def render_modulo_compras():
         st.session_state["carrinho_sc"] = []
     
     with aba_solicitacao:
-        st.subheader("Montar Lote da Solicitação de Compra (SC)")
+        st.subheader("Montar Lote da Solicitação de Compra")
         opcoes_projetos = obter_opcoes_destino(conn)
         
         with st.form("form_add_item_sc"):
@@ -33,7 +33,7 @@ def render_modulo_compras():
             with col3:
                 forn_sug = st.text_input("Fornecedor Sugerido (Opcional)")
                 
-            btn_add = st.form_submit_button("➕ Adicionar Item ao Lote")
+            btn_add = st.form_submit_button("Adicionar Item ao Lote")
             if btn_add:
                 if not item_nome:
                     st.error("Informe o nome do item.")
@@ -55,7 +55,7 @@ def render_modulo_compras():
             
             solicitante = st.text_input("Nome do Solicitante *", value=st.session_state.get("user_token", ""))
             
-            if st.button("🚀 Emitir Solicitação de Compra (Gerar SC)", type="primary"):
+            if st.button("Emitir Solicitação de Compra (Gerar SC)", type="primary"):
                 if not solicitante:
                     st.error("Preencha o nome do solicitante.")
                 else:
@@ -73,18 +73,18 @@ def render_modulo_compras():
                         conn.commit()
                         cursor.close()
                         st.session_state["carrinho_sc"] = []
-                        st.success(f"🎉 Solicitação **SC #{novo_numero_sc:04d}** emitida com sucesso!")
+                        st.success(f"Solicitação SC #{novo_numero_sc:04d} emitida com sucesso!")
                         st.rerun()
                     except Exception as e:
                         conn.rollback()
                         st.error(f"Erro ao salvar SC: {e}")
                         
-            if st.button("🗑️ Limpar Lote"):
+            if st.button("Limpar Lote"):
                 st.session_state["carrinho_sc"] = []
                 st.rerun()
 
     with aba_aprov_gestor:
-        st.subheader("1ª Aprovação - Gestor da Área (Por SC)")
+        st.subheader("Aprovação Inicial - Gestor da Área (Por SC)")
         try:
             df_pendentes = pd.read_sql_query(
                 "SELECT DISTINCT numero_sc, projeto, solicitante, data_pedido FROM compras WHERE status = 'Pendente Aprovação Gestor'", 
@@ -104,7 +104,7 @@ def render_modulo_compras():
                         
                         col_g1, col_g2 = st.columns(2)
                         with col_g1:
-                            if st.button(f"✅ Aprovar SC #{sc_row['numero_sc']:04d}", type="primary", key=f"apr_sc_{sc_row['numero_sc']}"):
+                            if st.button(f"Aprovar SC #{sc_row['numero_sc']:04d}", type="primary", key=f"apr_sc_{sc_row['numero_sc']}"):
                                 try:
                                     cursor = conn.cursor()
                                     cursor.execute("UPDATE compras SET status = 'Aprovado pelo Gestor - Aguardando Cotação' WHERE numero_sc = %s;", (sc_row['numero_sc'],))
@@ -116,7 +116,7 @@ def render_modulo_compras():
                                     conn.rollback()
                                     st.error(f"Erro: {e}")
                         with col_g2:
-                            if st.button(f"❌ Rejeitar SC #{sc_row['numero_sc']:04d}", key=f"rej_sc_{sc_row['numero_sc']}"):
+                            if st.button(f"Rejeitar SC #{sc_row['numero_sc']:04d}", key=f"rej_sc_{sc_row['numero_sc']}"):
                                 try:
                                     cursor = conn.cursor()
                                     cursor.execute("UPDATE compras SET status = 'Rejeitado pelo Gestor' WHERE numero_sc = %s;", (sc_row['numero_sc'],))
@@ -131,7 +131,7 @@ def render_modulo_compras():
             st.error(f"Erro: {e}")
 
     with aba_cotacao:
-        st.subheader("Matriz de 3 Cotações em Lote (Setor de Compras)")
+        st.subheader("Matriz de Cotações em Lote (Setor de Compras)")
         try:
             df_cot = pd.read_sql_query(
                 "SELECT DISTINCT numero_sc, projeto, solicitante FROM compras WHERE status = 'Aprovado pelo Gestor - Aguardando Cotação' AND cotacao_concluida = FALSE", 
@@ -164,24 +164,24 @@ def render_modulo_compras():
                 
                 col_f1, col_f2, col_f3 = st.columns(3)
                 with col_f1:
-                    st.markdown("##### 🏢 Fornecedor 1")
+                    st.markdown("##### Fornecedor 1")
                     sup1_nome = st.text_input("Nome F1", value=default_f1, key=f"sup1_{sc_selecionada}")
                     sup1_prazo = st.number_input("Prazo de Entrega (Dias)", min_value=0, value=default_p1, key=f"p1_{sc_selecionada}")
                     sup1_frete = st.number_input("Valor do Frete (R$)", min_value=0.0, value=default_fr1, format="%.2f", key=f"fr1_{sc_selecionada}")
                 with col_f2:
-                    st.markdown("##### 🏢 Fornecedor 2")
+                    st.markdown("##### Fornecedor 2")
                     sup2_nome = st.text_input("Nome F2", value=default_f2, key=f"sup2_{sc_selecionada}")
                     sup2_prazo = st.number_input("Prazo de Entrega (Dias)", min_value=0, value=default_p2, key=f"p2_{sc_selecionada}")
                     sup2_frete = st.number_input("Valor do Frete (R$)", min_value=0.0, value=default_fr2, format="%.2f", key=f"fr2_{sc_selecionada}")
                 with col_f3:
-                    st.markdown("##### 🏢 Fornecedor 3")
+                    st.markdown("##### Fornecedor 3")
                     sup3_nome = st.text_input("Nome F3", value=default_f3, key=f"sup3_{sc_selecionada}")
                     sup3_prazo = st.number_input("Prazo de Entrega (Dias)", min_value=0, value=default_p3, key=f"p3_{sc_selecionada}")
                     sup3_frete = st.number_input("Valor do Frete (R$)", min_value=0.0, value=default_fr3, format="%.2f", key=f"fr3_{sc_selecionada}")
                 
                 st.markdown("---")
                 st.markdown("**Preencha os preços unitários para cada item abaixo:**")
-                st.caption("ℹ️ Itens sem preço completo em qualquer um dos 3 fornecedores continuarão pendentes nesta SC para posterior finalização.")
+                st.caption("Itens sem preço completo em qualquer um dos 3 fornecedores continuarão pendentes nesta SC para posterior finalização.")
                 
                 df_editavel = df_itens_cot.copy()
                 
@@ -203,9 +203,9 @@ def render_modulo_compras():
                     key=f"editor_sc_{sc_selecionada}"
                 )
                 
-                if st.button("💾 Salvar e Processar Itens Concluídos", type="primary"):
+                if st.button("Salvar e Processar Itens Concluídos", type="primary"):
                     if not sup1_nome or not sup2_nome or not sup3_nome:
-                        st.error("⚠️ Informe o nome dos 3 fornecedores nos campos acima.")
+                        st.error("Informe o nome dos 3 fornecedores nos campos acima.")
                     else:
                         try:
                             cursor = conn.cursor()
@@ -248,7 +248,7 @@ def render_modulo_compras():
                                     
                             conn.commit()
                             cursor.close()
-                            st.success(f"💾 Cotações salvas! {itens_concluidos_count} item(ns) completos avançaram para o gestor. Os incompletos continuam pendentes nesta SC.")
+                            st.success(f"Cotações salvas! {itens_concluidos_count} item(ns) completos avançaram para o gestor. Os incompletos continuam pendentes nesta SC.")
                             st.rerun()
                         except Exception as e:
                             conn.rollback()
@@ -257,7 +257,7 @@ def render_modulo_compras():
             st.error(f"Erro: {e}")
 
     with aba_escolha_gestor:
-        st.subheader("Seleção do Fornecedor por Item (Gestor da Área)")
+        st.subheader("Seleção do Fornecedor por Item - Aprovação Gestor Nível 1")
         try:
             df_esc = pd.read_sql_query(
                 "SELECT DISTINCT numero_sc, projeto, solicitante FROM compras WHERE status = 'Aguardando Escolha do Gestor da Área' AND cotacao_concluida = TRUE", 
@@ -277,7 +277,7 @@ def render_modulo_compras():
                 st.markdown(f"**Itens aptos da SC #{sc_escolha:04d}:**")
                 
                 st.markdown("---")
-                st.markdown("⚡ **Seleção em Lote (Definir fornecedor padrão para todos os itens abaixo):**")
+                st.markdown("**Seleção em Lote (Definir fornecedor padrão para todos os itens abaixo):**")
                 
                 nomes_forn_unicos = sorted(list(set(
                     df_itens_esc["f1_nome"].tolist() + df_itens_esc["f2_nome"].tolist() + df_itens_esc["f3_nome"].tolist()
@@ -289,9 +289,9 @@ def render_modulo_compras():
                 for idx, row in df_itens_esc.iterrows():
                     st.markdown(f"**Item:** {row['item']} ({row['quantidade']} {row['unidade']})")
                     opcoes_f = [
-                        f"1️⃣ {row['f1_nome']} — R$ {row['f1_preco']:.2f} | Prazo: {row['f1_prazo']}d | Frete: R$ {row['f1_frete']:.2f}",
-                        f"2️⃣ {row['f2_nome']} — R$ {row['f2_preco']:.2f} | Prazo: {row['f2_prazo']}d | Frete: R$ {row['f2_frete']:.2f}",
-                        f"3️⃣ {row['f3_nome']} — R$ {row['f3_preco']:.2f} | Prazo: {row['f3_prazo']}d | Frete: R$ {row['f3_frete']:.2f}"
+                        f"1 - {row['f1_nome']} — R$ {row['f1_preco']:.2f} | Prazo: {row['f1_prazo']}d | Frete: R$ {row['f1_frete']:.2f}",
+                        f"2 - {row['f2_nome']} — R$ {row['f2_preco']:.2f} | Prazo: {row['f2_prazo']}d | Frete: R$ {row['f2_frete']:.2f}",
+                        f"3 - {row['f3_nome']} — R$ {row['f3_preco']:.2f} | Prazo: {row['f3_prazo']}d | Frete: R$ {row['f3_frete']:.2f}"
                     ]
                     
                     default_idx = 0
@@ -305,16 +305,16 @@ def render_modulo_compras():
                     escolhas_usuario[row['id']] = escolha
                     st.markdown("---")
                     
-                if st.button("✅ Confirmar Seleção e Enviar para Aprovação Executiva", type="primary"):
+                if st.button("Confirmar Seleção e Enviar para Aprovação Nível 2", type="primary"):
                     try:
                         cursor = conn.cursor()
                         for item_id, escolha in escolhas_usuario.items():
                             cursor.execute("SELECT f1_nome, f1_preco, f2_nome, f2_preco, f3_nome, f3_preco FROM compras WHERE id = %s", (item_id,))
                             f_data = cursor.fetchone()
                             
-                            if "1️⃣" in escolha:
+                            if "1 -" in escolha:
                                 f_escolhido, p_escolhido = f_data[0], f_data[1]
-                            elif "2️⃣" in escolha:
+                            elif "2 -" in escolha:
                                 f_escolhido, p_escolhido = f_data[2], f_data[3]
                             else:
                                 f_escolhido, p_escolhido = f_data[4], f_data[5]
@@ -327,7 +327,7 @@ def render_modulo_compras():
                             
                         conn.commit()
                         cursor.close()
-                        st.success("🎉 Seleção confirmada e encaminhada para a Gerência Geral!")
+                        st.success("Seleção confirmada e encaminhada para a Aprovação Nível 2!")
                         st.rerun()
                     except Exception as e:
                         conn.rollback()
@@ -336,7 +336,7 @@ def render_modulo_compras():
             st.error(f"Erro: {e}")
 
     with aba_aprov_gerente:
-        st.subheader("Aprovação Executiva da SC (Gerência / Diretoria)")
+        st.subheader("Aprovação Nível 2 (Gerência / Diretoria)")
         try:
             df_ger = pd.read_sql_query(
                 "SELECT DISTINCT numero_sc, projeto, solicitante FROM compras WHERE status = 'Aguardando Aprovação Gerente Geral'", 
@@ -344,7 +344,7 @@ def render_modulo_compras():
             )
             
             if df_ger.empty:
-                st.info("Nenhuma SC aguardando a aprovação executiva.")
+                st.info("Nenhuma SC aguardando a aprovação Nível 2.")
             else:
                 for idx, sc_row in df_ger.iterrows():
                     with st.expander(f"SC #{sc_row['numero_sc']:04d} | Projeto: {sc_row['projeto']} | Solicitante: {sc_row['solicitante']}"):
@@ -354,26 +354,26 @@ def render_modulo_compras():
                         )
                         
                         for _, r in df_itens_ger.iterrows():
-                            st.markdown(f"📦 **{r['item']}** ({r['quantidade']} {r['unidade']})")
-                            st.markdown(f"👉 **Fornecedor Vencedor:** `{r['fornecedor_escolhido']}` por `R$ {r['preco_escolhido']:.2f}` (Unit.)")
+                            st.markdown(f"**Item:** {r['item']} ({r['quantidade']} {r['unidade']})")
+                            st.markdown(f"**Fornecedor Vencedor:** `{r['fornecedor_escolhido']}` por `R$ {r['preco_escolhido']:.2f}` (Unit.)")
                             st.caption(f"Comparativo de Propostas: [1] {r['f1_nome']} (R$ {r['f1_preco']:.2f} | {r['f1_prazo']}d | R$ {r['f1_frete']:.2f}) | [2] {r['f2_nome']} (R$ {r['f2_preco']:.2f} | {r['f2_prazo']}d | R$ {r['f2_frete']:.2f}) | [3] {r['f3_nome']} (R$ {r['f3_preco']:.2f} | {r['f3_prazo']}d | R$ {r['f3_frete']:.2f})")
                             st.markdown("---")
                         
                         col_fin1, col_fin2 = st.columns(2)
                         with col_fin1:
-                            if st.button(f"✅ Aprovar Definitivamente SC #{sc_row['numero_sc']:04d}", type="primary", key=f"ger_ok_{sc_row['numero_sc']}"):
+                            if st.button(f"Aprovar Definitivamente SC #{sc_row['numero_sc']:04d}", type="primary", key=f"ger_ok_{sc_row['numero_sc']}"):
                                 try:
                                     cursor = conn.cursor()
                                     cursor.execute("UPDATE compras SET status = 'Aprovado - Pronto para Emitir Pedido' WHERE numero_sc = %s AND status = 'Aguardando Aprovação Gerente Geral';", (sc_row['numero_sc'],))
                                     conn.commit()
                                     cursor.close()
-                                    st.success(f"SC #{sc_row['numero_sc']:04d} aprovada executivamente com sucesso!")
+                                    st.success(f"SC #{sc_row['numero_sc']:04d} aprovada no Nível 2 com sucesso!")
                                     st.rerun()
                                 except Exception as e:
                                     conn.rollback()
                                     st.error(f"Erro: {e}")
                         with col_fin2:
-                            if st.button(f"❌ Retornar SC para Cotação #{sc_row['numero_sc']:04d}", key=f"ger_no_{sc_row['numero_sc']}"):
+                            if st.button(f"Retornar SC para Cotação #{sc_row['numero_sc']:04d}", key=f"ger_no_{sc_row['numero_sc']}"):
                                 try:
                                     cursor = conn.cursor()
                                     cursor.execute("UPDATE compras SET status = 'Aprovado pelo Gestor - Aguardando Cotação', cotacao_concluida = FALSE WHERE numero_sc = %s;", (sc_row['numero_sc'],))
