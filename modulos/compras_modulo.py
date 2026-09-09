@@ -5,12 +5,13 @@ from database import get_db_connection, obter_opcoes_destino
 def render_modulo_compras():
     st.header("Módulo de Compras")
     
-    aba_solicitacao, aba_aprov_gestor, aba_cotacao, aba_escolha_gestor, aba_aprov_gerente = st.tabs([
+    aba_solicitacao, aba_aprov_gestor, aba_cotacao, aba_escolha_gestor, aba_aprov_gerente, aba_sc_status = st.tabs([
         "Nova Solicitação", 
         "Aprovação Gestor", 
         "Cotações",
         "Aprovação Gestor Nível 1",
-        "Aprovação Nível 2"
+        "Aprovação Nível 2",
+        "SC Aprovada/Reprovada"
     ])
     
     conn = get_db_connection()
@@ -386,5 +387,81 @@ def render_modulo_compras():
                                     st.error(f"Erro: {e}")
         except Exception as e:
             st.error(f"Erro: {e}")
+
+    with aba_sc_status:
+        st.subheader("Solicitações de Compra (SC) Aprovadas / Reprovadas")
+        try:
+            df_status = pd.read_sql_query(
+                "SELECT DISTINCT numero_sc, projeto, solicitante, status FROM compras WHERE status IN ('Aprovado - Pronto para Emitir Pedido', 'Rejeitado pelo Gestor')", 
+                conn
+            )
+            
+            if df_status.empty:
+                st.info("Nenhuma SC finalizada (aprovada ou reprovada) no momento.")
+            else:
+                st.dataframe(df_status, use_container_width=True)
+                
+                # Filtra apenas as aprovadas para a geração do PO/Pedido de Compra
+                df_aprovadas = df_status[df_status["status"] == 'Aprovado - Pronto para Emitir Pedido']
+                if not df_aprovadas.empty:
+                    st.markdown("---")
+                    st.subheader("Gerar Pedido de Compra (PO)")
+                    sc_po = st.selectbox("Selecione a SC Aprovada para Gerar o Pedido", options=df_aprovadas["numero_sc"].tolist(), format_func=lambda x: f"SC #{x:04d}")
+                    
+                    if sc_po:
+                        df_itens_po = pd.read_sql_query(
+                            "SELECT item, quantidade, unidade, fornecedor_escolhido, preco_escolhido, data_pedido FROM compras WHERE numero_sc = %s AND status = 'Aprovado - Pronto para Emitir Pedido'",
+                            conn, params=(sc_po,)
+                        )
+                        
+                        if not df_itens_po.empty:
+                            forn_atual = df_itens_po["fornecedor_escolhido"].iloc[0]
+                            data_ped = pd.to_datetime(df_itens_po["data_pedido"].iloc[0]).strftime("%d/%m/%Y")
+                            
+                            st.markdown(f"### Visualização do Pedido de Compra - SC #{sc_po:04d}")
+                            
+                            # Layout assemelhado ao modelo fornecido
+                            st.markdown(f"""
+                            **Delta Sollutions**  
+                            **Pedido de compra N° {sc_po + 1600}**
+                            
+                            ---
+                            **Fornecedor:**  
+                            `{forn_atual}`  
+                            
+                            **Empresa Compradora:**  
+                            L LEITAO DE SOUZA LTDA — CNPJ: 10.357.765/0001-37, IE: 042907500  
+                            Avenida Governador Danilo Areosa, N 1199, 69075351 - Manaus, AM  
+                            
+                            **Data do Pedido:** {data_ped}  
+                            """)
+                            
+                            # Tabela de itens formatada com valor total
+                            df_itens_po["Valor Total (R$)"] = df_itens_po["quantidade"] * df_itens_po["preco_escolhido"]
+                            
+                            st.markdown("#### Itens do Pedido de Compra")
+                            st.dataframe(
+                                df_itens_po[["item", "unidade", "quantidade", "preco_escolhido", "Valor Total (R$)"]].rename(columns={
+                                    "item": "Descrição do produto/serviço",
+                                    "unidade": "Un",
+                                    "quantidade": "Qtde",
+                                    "preco_escolhido": "Valor unitário"
+                                }),
+                                use_container_width=True
+                            )
+                            
+                            soma_qtd = df_itens_po["quantidade"].sum()
+                            total_geral = df_itens_po["Valor Total (R$)"].sum()
+                            
+                            st.markdown(f"""
+                            - **Soma das Quantidades:** {soma_qtd:,.2f}
+                            - **Total de Produtos:** R$ {total_geral:,.2f}
+                            - **Total do Pedido:** R$ {total_geral:,.2f}
+                            """)
+                            
+                            if st.button("Imprimir / Salvar Pedido de Compra", type="primary"):
+                                st.success(f"Pedido de Compra referente à SC #{sc_po:04d} gerado com sucesso para o fornecedor {forn_atual}!")
+        except Exception as e:
+            st.error(f"Erro ao carregar status das SCs: {e}")
             
     conn.close()
