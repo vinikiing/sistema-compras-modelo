@@ -3,7 +3,6 @@ import streamlit as st
 import psycopg2
 
 def get_db_connection():
-    # Monta a URL automaticamente usando as variáveis individuais que o Railway já injeta no app
     pg_host = os.getenv("PGHOST")
     pg_user = os.getenv("PGUSER")
     pg_password = os.getenv("PGPASSWORD")
@@ -15,17 +14,10 @@ def get_db_connection():
     else:
         db_url = os.getenv("DATABASE_URL")
         
-    if not db_url or db_url.strip() == "":
-        try:
-            db_url = st.secrets["DATABASE_URL"]
-        except Exception:
-            pass
-            
     if not db_url:
-        raise ValueError("DATABASE_URL não configurada! Verifique se o Postgres está vinculado ao app.")
+        raise ValueError("Banco não conectado! Certifique-se de que o Postgres está vinculado ao aplicativo no Railway.")
         
     return psycopg2.connect(db_url, sslmode='require')
-
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
