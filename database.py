@@ -3,23 +3,11 @@ import streamlit as st
 import psycopg2
 
 def get_db_connection():
-    db_url = None
+    # URL direta do seu Postgres no Railway para blindar contra bugs de painel
+    db_url = "postgresql://postgres:tmJFapQqfvspySMVyEoGShHsEGrSaTvT@kodama.proxy.rlwy.net:24855/railway"
     
-    # Varre todas as variáveis de ambiente do Railway procurando por uma URL do Postgres
-    for key, value in os.environ.items():
-        if value and isinstance(value, str) and value.startswith("postgresql://"):
-            db_url = value
-            break
-            
-    # Fallback para o Streamlit Secrets caso esteja testando local
     if not db_url:
-        try:
-            db_url = st.secrets["DATABASE_URL"]
-        except Exception:
-            pass
-            
-    if not db_url:
-        raise ValueError("Nenhuma URL do Postgres encontrada nas variáveis de ambiente.")
+        raise ValueError("URL do banco não informada.")
         
     return psycopg2.connect(db_url, sslmode='require')
 
