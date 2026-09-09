@@ -1,7 +1,10 @@
+import os
+import streamlit as st
+import psycopg2
+
 def get_db_connection():
     db_url = os.getenv("DATABASE_URL")
     
-    # Se o DATABASE_URL vier vazio, monta a string usando as variáveis individuais do Postgres
     if not db_url or db_url.strip() == "":
         pg_host = os.getenv("PGHOST")
         pg_user = os.getenv("PGUSER")
