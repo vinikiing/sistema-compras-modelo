@@ -15,7 +15,6 @@ def render_modulo_compras():
     
     conn = get_db_connection()
     
-    # Inicializa carrinho temporário na sessão para múltiplos itens
     if "carrinho_sc" not in st.session_state:
         st.session_state["carrinho_sc"] = []
     
@@ -62,20 +61,19 @@ def render_modulo_compras():
                 else:
                     try:
                         cursor = conn.cursor()
-                        # Descobre o próximo número da SC
                         cursor.execute("SELECT COALESCE(MAX(numero_sc), 0) + 1 FROM compras;")
                         novo_numero_sc = cursor.fetchone()[0]
                         
                         for row in st.session_state["carrinho_sc"]:
                             cursor.execute("""
-                                INSERT INTO compras (numero_sc, projeto, item, quantidade, unidade, fornecedor_sugerido, status, solicitante)
-                                VALUES (%s, %s, %s, %s, %s, %s, 'Pendente Aprovação Gestor', %s);
+                                INSERT INTO compras (numero_sc, projeto, item, quantidade, unidade, fornecedor_sugerido, status, solicitante, cotacao_concluida)
+                                VALUES (%s, %s, %s, %s, %s, %s, 'Pendente Aprovação Gestor', %s, FALSE);
                             """, (novo_numero_sc, row["projeto"], row["item"], row["quantidade"], row["unidade"], row["fornecedor_sugerido"], solicitante))
                             
                         conn.commit()
                         cursor.close()
                         st.session_state["carrinho_sc"] = []
-                        st.success(f"🎉 Solicitação **SC #{novo_numero_sc:04d}** gerada com sucesso e enviada ao gestor!")
+                        st.success(f"🎉 Solicitação **SC #{novo_numero_sc:04d}** gerada com sucesso!")
                         st.rerun()
                     except Exception as e:
                         conn.rollback()
@@ -135,25 +133,25 @@ def render_modulo_compras():
     with aba_cotacao:
         st.subheader("Matriz de 3 Cotações em Lote (Setor de Compras)")
         try:
+            # Mostra itens que ainda não tiveram cotação concluída na SC
             df_cot = pd.read_sql_query(
-                "SELECT DISTINCT numero_sc, projeto, solicitante FROM compras WHERE status = 'Aprovado pelo Gestor - Aguardando Cotação'", 
+                "SELECT DISTINCT numero_sc, projeto, solicitante FROM compras WHERE status = 'Aprovado pelo Gestor - Aguardando Cotação' AND cotacao_concluida = FALSE", 
                 conn
             )
             
             if df_cot.empty:
-                st.info("Nenhuma SC aguardando cotação.")
+                st.info("Nenhuma SC aguardando cotação no momento.")
             else:
-                sc_selecionada = st.selectbox("Selecione o Número da SC para Cotação", options=df_cot["numero_sc"].tolist(), format_func=lambda x: f"SC #{x:04d}")
+                sc_selecionada = st.selectbox("Selecione o Número da SC para Cotação", options=df_cot["numero_sc"].tolist(), format_func=lambda x: f"SC #{x:04d}", key="sel_sc_cot")
                 
                 df_itens_cot = pd.read_sql_query(
-                    "SELECT id, item, quantidade, unidade, f1_nome, f1_preco, f2_nome, f2_preco, f3_nome, f3_preco FROM compras WHERE numero_sc = %s", 
+                    "SELECT id, item, quantidade, unidade, f1_nome, f1_preco, f1_prazo, f1_frete, f2_nome, f2_preco, f2_prazo, f2_frete, f3_nome, f3_preco, f3_prazo, f3_frete FROM compras WHERE numero_sc = %s AND cotacao_concluida = FALSE", 
                     conn, params=(sc_selecionada,)
                 )
                 
-                st.markdown(f"**Editando cotações para os itens da SC #{sc_selecionada:04d}:**")
-                st.info("Preencha as colunas abaixo diretamente. *Atenção:* Todos os itens devem conter os 3 fornecedores com nomes e preços preenchidos para que a SC possa avançar.")
+                st.markdown(f"**Editando cotações pendentes da SC #{sc_selecionada:04d}:**")
+                st.info("ℹ️ Preencha os 3 fornecedores, preços, prazo (dias) e frete. Itens que ficarem com cotações incompletas continuarão pendentes nesta SC para posterior finalização.")
                 
-                # Prepara dataframe editável para a matriz
                 df_editavel = df_itens_cot.copy()
                 
                 edited_df = st.data_editor(
@@ -165,48 +163,71 @@ def render_modulo_compras():
                         "unidade": st.column_config.TextColumn("Un", disabled=True),
                         "f1_nome": "Fornecedor 1",
                         "f1_preco": st.column_config.NumberColumn("Preço F1 (R$)", min_value=0.0, format="R$ %.2f"),
+                        "f1_prazo": st.column_config.NumberColumn("Prazo F1 (Dias)", min_value=0),
+                        "f1_frete": st.column_config.NumberColumn("Frete F1 (R$)", min_value=0.0, format="R$ %.2f"),
                         "f2_nome": "Fornecedor 2",
                         "f2_preco": st.column_config.NumberColumn("Preço F2 (R$)", min_value=0.0, format="R$ %.2f"),
+                        "f2_prazo": st.column_config.NumberColumn("Prazo F2 (Dias)", min_value=0),
+                        "f2_frete": st.column_config.NumberColumn("Frete F2 (R$)", min_value=0.0, format="R$ %.2f"),
                         "f3_nome": "Fornecedor 3",
                         "f3_preco": st.column_config.NumberColumn("Preço F3 (R$)", min_value=0.0, format="R$ %.2f"),
+                        "f3_prazo": st.column_config.NumberColumn("Prazo F3 (Dias)", min_value=0),
+                        "f3_frete": st.column_config.NumberColumn("Frete F3 (R$)", min_value=0.0, format="R$ %.2f"),
                     },
                     hide_index=True,
                     key=f"editor_sc_{sc_selecionada}"
                 )
                 
-                if st.button("💾 Salvar Cotações da SC e Enviar para Escolha", type="primary"):
+                if st.button("💾 Salvar e Processar Itens Concluídos", type="primary"):
                     try:
                         cursor = conn.cursor()
-                        incompleto = False
+                        itens_concluidos_count = 0
                         
                         for idx, row in edited_df.iterrows():
-                            # Valida se algum item ficou sem nome ou preço zerado em qualquer um dos 3
-                            if not row["f1_nome"] or row["f1_preco"] <= 0 or not row["f2_nome"] or row["f2_preco"] <= 0 or not row["f3_nome"] or row["f3_preco"] <= 0:
-                                incompleto = True
-                                break
-                                
-                            cursor.execute("""
-                                UPDATE compras 
-                                SET f1_nome = %s, f1_preco = %s, 
-                                    f2_nome = %s, f2_preco = %s, 
-                                    f3_nome = %s, f3_preco = %s 
-                                WHERE id = %s;
-                            """, (row["f1_nome"], row["f1_preco"], row["f2_nome"], row["f2_preco"], row["f3_nome"], row["f3_preco"], row["id"]))
+                            # Verifica se preencheu os 3 fornecedores completamente
+                            tem_f1 = bool(row["f1_nome"]) and float(row["f1_preco"]) > 0
+                            tem_f2 = bool(row["f2_nome"]) and float(row["f2_preco"]) > 0
+                            tem_f3 = bool(row["f3_nome"]) and float(row["f3_preco"]) > 0
                             
-                        if incompleto:
-                            conn.rollback()
-                            cursor.close()
-                            st.error("⚠️ Existem itens com cotações em branco ou preço zero. Todos os 3 fornecedores devem ser preenchidos para cada item para encerrar a cotação desta SC.")
-                        else:
-                            # Atualiza status da SC inteira para aguardar escolha do gestor
-                            cursor.execute("UPDATE compras SET status = 'Aguardando Escolha do Gestor da Área' WHERE numero_sc = %s;", (sc_selecionada,))
-                            conn.commit()
-                            cursor.close()
-                            st.success(f"🎉 Cotações da SC #{sc_selecionada:04d} salvas com sucesso! SC enviada para a escolha do gestor.")
-                            st.rerun()
+                            if tem_f1 and tem_f2 and tem_f3:
+                                # Item pronto com 3 cotações
+                                cursor.execute("""
+                                    UPDATE compras 
+                                    SET f1_nome = %s, f1_preco = %s, f1_prazo = %s, f1_frete = %s,
+                                        f2_nome = %s, f2_preco = %s, f2_prazo = %s, f2_frete = %s,
+                                        f3_nome = %s, f3_preco = %s, f3_prazo = %s, f3_frete = %s,
+                                        cotacao_concluida = TRUE,
+                                        status = 'Aguardando Escolha do Gestor da Área'
+                                    WHERE id = %s;
+                                """, (
+                                    row["f1_nome"], row["f1_preco"], row["f1_prazo"], row["f1_frete"],
+                                    row["f2_nome"], row["f2_preco"], row["f2_prazo"], row["f2_frete"],
+                                    row["f3_nome"], row["f3_preco"], row["f3_prazo"], row["f3_frete"],
+                                    row["id"]
+                                ))
+                                itens_concluidos_count += 1
+                            else:
+                                # Salva parcial mas mantém cotacao_concluida = FALSE para continuar pendente na SC
+                                cursor.execute("""
+                                    UPDATE compras 
+                                    SET f1_nome = %s, f1_preco = %s, f1_prazo = %s, f1_frete = %s,
+                                        f2_nome = %s, f2_preco = %s, f2_prazo = %s, f2_frete = %s,
+                                        f3_nome = %s, f3_preco = %s, f3_prazo = %s, f3_frete = %s
+                                    WHERE id = %s;
+                                """, (
+                                    row["f1_nome"], row["f1_preco"], row["f1_prazo"], row["f1_frete"],
+                                    row["f2_nome"], row["f2_preco"], row["f2_prazo"], row["f2_frete"],
+                                    row["f3_nome"], row["f3_preco"], row["f3_prazo"], row["f3_frete"],
+                                    row["id"]
+                                ))
+                                
+                        conn.commit()
+                        cursor.close()
+                        st.success(f"💾 Cotações salvas! {itens_concluidos_count} item(ns) com 3 cotações completas avançaram para o gestor. Os incompletos continuam nesta SC aguardando você preencher.")
+                        st.rerun()
                     except Exception as e:
                         conn.rollback()
-                        st.error(f"Erro ao salvar cotações: {e}")
+                        st.error(f"Erro ao salvar: {e}")
         except Exception as e:
             st.error(f"Erro: {e}")
 
@@ -214,38 +235,57 @@ def render_modulo_compras():
         st.subheader("Escolha do Fornecedor por Item (Gestor da Área)")
         try:
             df_esc = pd.read_sql_query(
-                "SELECT DISTINCT numero_sc, projeto, solicitante FROM compras WHERE status = 'Aguardando Escolha do Gestor da Área'", 
+                "SELECT DISTINCT numero_sc, projeto, solicitante FROM compras WHERE status = 'Aguardando Escolha do Gestor da Área' AND cotacao_concluida = TRUE", 
                 conn
             )
             
             if df_esc.empty:
-                st.info("Nenhuma SC aguardando escolha de fornecedor pelo gestor.")
+                st.info("Nenhum item aguardando escolha de fornecedor pelo gestor.")
             else:
-                sc_escolha = st.selectbox("Selecione o Número da SC para Escolha", options=df_esc["numero_sc"].tolist(), format_func=lambda x: f"SC #{x:04d}", key="sel_esc_sc")
+                sc_escolha = st.selectbox("Selecione o Número da SC para Escolha", options=df_esc["numero_sc"].tolist(), format_func=lambda x: f"SC #{x:04d}", key="sel_esc_sc_novo")
                 
                 df_itens_esc = pd.read_sql_query(
-                    "SELECT id, item, quantidade, unidade, f1_nome, f1_preco, f2_nome, f2_preco, f3_nome, f3_preco FROM compras WHERE numero_sc = %s", 
+                    "SELECT id, item, quantidade, unidade, f1_nome, f1_preco, f1_prazo, f1_frete, f2_nome, f2_preco, f2_prazo, f2_frete, f3_nome, f3_preco, f3_prazo, f3_frete FROM compras WHERE numero_sc = %s AND cotacao_concluida = TRUE AND status = 'Aguardando Escolha do Gestor da Área'", 
                     conn, params=(sc_escolha,)
                 )
                 
-                st.markdown(f"**Escolha o fornecedor vencedor para cada item da SC #{sc_escolha:04d}:**")
+                st.markdown(f"**Itens aptos da SC #{sc_escolha:04d}:**")
+                
+                # Atalho corporativo para pressa
+                st.markdown("---")
+                st.markdown("⚡ **Atalho rápido (Sem tempo? Escolha um fornecedor padrão para todos os itens abaixo):**")
+                
+                # Coleta lista de nomes únicos de fornecedores disponíveis nestes itens
+                nomes_forn_unicos = sorted(list(set(
+                    df_itens_esc["f1_nome"].tolist() + df_itens_esc["f2_nome"].tolist() + df_itens_esc["f3_nome"].tolist()
+                )))
+                
+                forn_padrao = st.selectbox("Aplicar este fornecedor em massa (Opcional)", options=["-- Escolha individual abaixo --"] + nomes_forn_unicos)
                 
                 escolhas_usuario = {}
                 for idx, row in df_itens_esc.iterrows():
-                    st.markdown(f"--- **Item:** {row['item']} ({row['quantidade']} {row['unidade']})")
+                    st.markdown(f"**Item:** {row['item']} ({row['quantidade']} {row['unidade']})")
                     opcoes_f = [
-                        f"1️⃣ {row['f1_nome']} (R$ {row['f1_preco']:.2f})",
-                        f"2️⃣ {row['f2_nome']} (R$ {row['f2_preco']:.2f})",
-                        f"3️⃣ {row['f3_nome']} (R$ {row['f3_preco']:.2f})"
+                        f"1️⃣ {row['f1_nome']} — R$ {row['f1_preco']:.2f} | Prazo: {row['f1_prazo']}d | Frete: R$ {row['f1_frete']:.2f}",
+                        f"2️⃣ {row['f2_nome']} — R$ {row['f2_preco']:.2f} | Prazo: {row['f2_prazo']}d | Frete: R$ {row['f2_frete']:.2f}",
+                        f"3️⃣ {row['f3_nome']} — R$ {row['f3_preco']:.2f} | Prazo: {row['f3_prazo']}d | Frete: R$ {row['f3_frete']:.2f}"
                     ]
-                    escolha = st.radio(f"Vencedor para: {row['item']}", options=opcoes_f, key=f"radio_item_{row['id']}")
-                    escolhas_usuario[row['id']] = escolha
                     
-                if st.button("✅ Confirmar Escolhas da SC e Enviar para Gerente Geral", type="primary"):
+                    default_idx = 0
+                    if forn_padrao != "-- Escolha individual abaixo --":
+                        for i, opt in enumerate(opcoes_f):
+                            if forn_padrao in opt:
+                                default_idx = i
+                                break
+                                
+                    escolha = st.radio(f"Vencedor - {row['id']}", options=opcoes_f, index=default_idx, key=f"radio_item_{row['id']}", label_visibility="collapsed")
+                    escolhas_usuario[row['id']] = escolha
+                    st.markdown("---")
+                    
+                if st.button("✅ Confirmar Escolhas e Enviar para Gerente Geral", type="primary"):
                     try:
                         cursor = conn.cursor()
                         for item_id, escolha in escolhas_usuario.items():
-                            # Busca os dados do item de novo para mapear
                             cursor.execute("SELECT f1_nome, f1_preco, f2_nome, f2_preco, f3_nome, f3_preco FROM compras WHERE id = %s", (item_id,))
                             f_data = cursor.fetchone()
                             
@@ -258,19 +298,17 @@ def render_modulo_compras():
                                 
                             cursor.execute("""
                                 UPDATE compras 
-                                SET fornecedor_escolhido = %s, preco_escolhido = %s 
+                                SET fornecedor_escolhido = %s, preco_escolhido = %s, status = 'Aguardando Aprovação Gerente Geral' 
                                 WHERE id = %s;
                             """, (f_escolhido, p_escolhido, item_id))
                             
-                        # Atualiza status da SC inteira
-                        cursor.execute("UPDATE compras SET status = 'Aguardando Aprovação Gerente Geral' WHERE numero_sc = %s;", (sc_escolha,))
                         conn.commit()
                         cursor.close()
-                        st.success(f"Escolhas da SC #{sc_escolha:04d} confirmadas! Enviada para o Gerente Geral.")
+                        st.success("🎉 Escolhas confirmadas e enviadas para o Gerente Geral!")
                         st.rerun()
                     except Exception as e:
                         conn.rollback()
-                        st.error(f"Erro ao salvar escolhas: {e}")
+                        st.error(f"Erro: {e}")
         except Exception as e:
             st.error(f"Erro: {e}")
 
@@ -287,21 +325,27 @@ def render_modulo_compras():
             else:
                 for idx, sc_row in df_ger.iterrows():
                     with st.expander(f"SC #{sc_row['numero_sc']:04d} | Projeto: {sc_row['projeto']} | Solicitante: {sc_row['solicitante']}"):
-                        df_resumo = pd.read_sql_query(
-                            "SELECT item, quantidade, unidade, fornecedor_escolhido, preco_escolhido, f1_nome, f1_preco, f2_nome, f2_preco, f3_nome, f3_preco FROM compras WHERE numero_sc = %s", 
+                        df_itens_ger = pd.read_sql_query(
+                            "SELECT item, quantidade, unidade, fornecedor_escolhido, preco_escolhido, f1_nome, f1_preco, f1_prazo, f2_nome, f2_preco, f2_prazo, f3_nome, f3_preco, f3_prazo FROM compras WHERE numero_sc = %s AND status = 'Aguardando Aprovação Gerente Geral'", 
                             conn, params=(sc_row['numero_sc'],)
                         )
-                        st.dataframe(df_resumo, use_container_width=True)
+                        
+                        # Renderiza tabela limpa e profissional para o gerente sem códigos feios
+                        for _, r in df_itens_ger.iterrows():
+                            st.markdown(f"📦 **{r['item']}** ({r['quantidade']} {r['unidade']})")
+                            st.markdown(f"👉 **Escolhido:** `{r['fornecedor_escolhido']}` por `R$ {r['preco_escolhido']:.2f}`")
+                            st.caption(f"Comparativo de Mercado: [1] {r['f1_nome']} (R$ {r['f1_preco']:.2f} / {r['f1_prazo']}d) | [2] {r['f2_nome']} (R$ {r['f2_preco']:.2f} / {r['f2_prazo']}d) | [3] {r['f3_nome']} (R$ {r['f3_preco']:.2f} / {r['f3_prazo']}d)")
+                            st.markdown("---")
                         
                         col_fin1, col_fin2 = st.columns(2)
                         with col_fin1:
                             if st.button(f"✅ Aprovar Definitivamente SC #{sc_row['numero_sc']:04d}", type="primary", key=f"ger_ok_{sc_row['numero_sc']}"):
                                 try:
                                     cursor = conn.cursor()
-                                    cursor.execute("UPDATE compras SET status = 'Aprovado - Pronto para Emitir Pedido' WHERE numero_sc = %s;", (sc_row['numero_sc'],))
+                                    cursor.execute("UPDATE compras SET status = 'Aprovado - Pronto para Emitir Pedido' WHERE numero_sc = %s AND status = 'Aguardando Aprovação Gerente Geral';", (sc_row['numero_sc'],))
                                     conn.commit()
                                     cursor.close()
-                                    st.success(f"SC #{sc_row['numero_sc']:04d} aprovada integralmente pelo Gerente Geral!")
+                                    st.success(f"SC #{sc_row['numero_sc']:04d} aprovada integralmente!")
                                     st.rerun()
                                 except Exception as e:
                                     conn.rollback()
@@ -310,10 +354,10 @@ def render_modulo_compras():
                             if st.button(f"❌ Retornar SC para Cotação #{sc_row['numero_sc']:04d}", key=f"ger_no_{sc_row['numero_sc']}"):
                                 try:
                                     cursor = conn.cursor()
-                                    cursor.execute("UPDATE compras SET status = 'Aprovado pelo Gestor - Aguardando Cotação' WHERE numero_sc = %s;", (sc_row['numero_sc'],))
+                                    cursor.execute("UPDATE compras SET status = 'Aprovado pelo Gestor - Aguardando Cotação', cotacao_concluida = FALSE WHERE numero_sc = %s;", (sc_row['numero_sc'],))
                                     conn.commit()
                                     cursor.close()
-                                    st.warning("SC retornada para o setor de compras revisar cotações.")
+                                    st.warning("SC retornada para revisão do compras.")
                                     st.rerun()
                                 except Exception as e:
                                     conn.rollback()
