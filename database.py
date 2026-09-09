@@ -126,12 +126,19 @@ def init_db():
             solicitante VARCHAR(100),
             f1_nome VARCHAR(255),
             f1_preco NUMERIC(12,2) DEFAULT 0.0,
+            f1_prazo INTEGER DEFAULT 0,
+            f1_frete NUMERIC(12,2) DEFAULT 0.0,
             f2_nome VARCHAR(255),
             f2_preco NUMERIC(12,2) DEFAULT 0.0,
+            f2_prazo INTEGER DEFAULT 0,
+            f2_frete NUMERIC(12,2) DEFAULT 0.0,
             f3_nome VARCHAR(255),
             f3_preco NUMERIC(12,2) DEFAULT 0.0,
+            f3_prazo INTEGER DEFAULT 0,
+            f3_frete NUMERIC(12,2) DEFAULT 0.0,
             fornecedor_escolhido VARCHAR(255),
-            preco_escolhido NUMERIC(12,2) DEFAULT 0.0
+            preco_escolhido NUMERIC(12,2) DEFAULT 0.0,
+            cotacao_concluida BOOLEAN DEFAULT FALSE
         );
     """)
 
@@ -142,20 +149,26 @@ def init_db():
     """)
     conn.commit()
 
-    # Garante todas as colunas necessárias na tabela compras caso ela já existisse sem elas
-    colunas_compras = [
+    colunas_extras = [
         ("numero_sc", "INTEGER DEFAULT 1"),
         ("f1_nome", "VARCHAR(255)"),
         ("f1_preco", "NUMERIC(12,2) DEFAULT 0.0"),
+        ("f1_prazo", "INTEGER DEFAULT 0"),
+        ("f1_frete", "NUMERIC(12,2) DEFAULT 0.0"),
         ("f2_nome", "VARCHAR(255)"),
         ("f2_preco", "NUMERIC(12,2) DEFAULT 0.0"),
+        ("f2_prazo", "INTEGER DEFAULT 0"),
+        ("f2_frete", "NUMERIC(12,2) DEFAULT 0.0"),
         ("f3_nome", "VARCHAR(255)"),
         ("f3_preco", "NUMERIC(12,2) DEFAULT 0.0"),
+        ("f3_prazo", "INTEGER DEFAULT 0"),
+        ("f3_frete", "NUMERIC(12,2) DEFAULT 0.0"),
         ("fornecedor_escolhido", "VARCHAR(255)"),
-        ("preco_escolhido", "NUMERIC(12,2) DEFAULT 0.0")
+        ("preco_escolhido", "NUMERIC(12,2) DEFAULT 0.0"),
+        ("cotacao_concluida", "BOOLEAN DEFAULT FALSE")
     ]
 
-    for col_nome, col_tipo in colunas_compras:
+    for col_nome, col_tipo in colunas_extras:
         try:
             cursor.execute(f"ALTER TABLE compras ADD COLUMN IF NOT EXISTS {col_nome} {col_tipo};")
             conn.commit()
