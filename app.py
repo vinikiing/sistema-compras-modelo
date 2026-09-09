@@ -2,7 +2,7 @@ import os
 import sys
 import streamlit as st
 
-# Configuração da página Streamlit (Agora White-Label)
+# Configuração da página Streamlit
 st.set_page_config(
     page_title="Portal Gestão Pro - Compras & Estoque",
     page_icon="📦",
@@ -15,8 +15,7 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 import database as db
-from modulos import saving_projetos, estoque, almoxarife, configuracoes
-import compras_modulo
+from modulos import saving_projetos, estoque, almoxarife, configuracoes, compras_modulo
 
 # Inicializa banco de dados e estrutura de tabelas
 try:
@@ -84,7 +83,7 @@ tentar_restaurar_sessao_url()
 
 
 # ---------------------------------------------------------
-# TELA DE LOGIN (COM COLUNAS NATIVAS PERFEITAS)
+# TELA DE LOGIN
 # ---------------------------------------------------------
 def tela_login():
     st.markdown("""
@@ -92,7 +91,6 @@ def tela_login():
         .stApp {
             background-color: #0e1117;
         }
-        /* Caixa de login centralizada */
         div[data-testid="stForm"] {
             background-color: #161b22;
             padding: 30px;
@@ -105,11 +103,9 @@ def tela_login():
         </style>
     """, unsafe_allow_html=True)
 
-    # Coluna central ampla da página
     _, col_centro, _ = st.columns([1, 1.4, 1])
     
     with col_centro:
-        # Sub-colunas para alinhar perfeitamente a logo do lado do título no centro
         _, col_l, col_t, _ = st.columns([0.2, 0.8, 2.2, 0.2])
         
         with col_l:
@@ -122,7 +118,7 @@ def tela_login():
             st.markdown("<h2 style='color: #38bdf8; margin: 0px; line-height: 1.1;'>Portal Gestão Pro</h2>", unsafe_allow_html=True)
             st.markdown("<p style='color: #94a3b8; margin: 0px; font-size: 13px;'>Suprimentos & Estoque</p>", unsafe_allow_html=True)
         
-        st.write("") # Espaçamento leve
+        st.write("")
         
         with st.form("form_login_portal", clear_on_submit=False):
             st.markdown("<h4 style='color: #f0f6fc; margin-bottom: 15px;'>🔐 Acesso ao Sistema</h4>", unsafe_allow_html=True)
