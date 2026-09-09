@@ -5,15 +5,17 @@ from database import get_db_connection, obter_opcoes_destino
 def render_modulo_compras():
     st.header("🛒 Módulo de Compras")
     
-    # Abas internas para separar as etapas do fluxo de compras
-    aba_solicitacao, aba_aprovacao = st.tabs(["📝 Nova Solicitação", "👀 Aprovação do Gestor"])
+    # Adicionamos a aba de cotações ao fluxo
+    aba_solicitacao, aba_aprovacao, aba_cotacao = st.tabs([
+        "📝 Nova Solicitação", 
+        "👀 Aprovação do Gestor", 
+        "💰 Cotações (Compras)"
+    ])
     
     conn = get_db_connection()
     
     with aba_solicitacao:
         st.subheader("Criar Solicitação de Compra")
-        
-        # Pega os projetos/centros de custo cadastrados para o selectbox
         opcoes_projetos = obter_opcoes_destino(conn)
         
         with st.form("form_solicitacao_compra"):
@@ -59,29 +61,27 @@ def render_modulo_compras():
                 st.info("Nenhuma solicitação pendente no momento.")
             else:
                 st.dataframe(df_pendentes, use_container_width=True)
-                
-                # Selecionar ID para aprovar ou rejeitar
-                id_aprovar = st.selectbox("Selecione o ID da Solicitação para Ação", options=df_pendentes["id"].tolist())
+                id_aprovar = st.selectbox("Selecione o ID da Solicitação para Ação", options=df_pendentes["id"].tolist(), key="apr_gestor")
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
-                    if st.button("✅ Aprovar Solicitação", type="primary"):
+                    if st.button("✅ Aprovar Solicitação", type="primary", key="btn_aprov_gestor"):
                         try:
                             cursor = conn.cursor()
                             cursor.execute("UPDATE compras SET status = 'Aprovado pelo Gestor - Aguardando Cotação' WHERE id = %s;", (id_aprovar,))
                             conn.commit()
                             cursor.close()
-                            st.success(f"Solicitação #{id_aprovar} aprovada com sucesso! Enviada para o setor de cotações.")
+                            st.success(f"Solicitação #{id_aprovar} aprovada! Enviada para o setor de compras.")
                             st.rerun()
                         except Exception as e:
                             conn.rollback()
                             st.error(f"Erro ao aprovar: {e}")
                             
                 with col_btn2:
-                    if st.button("❌ Rejeitar Solicitação"):
+                    if st.button("❌ Rejeitar Solicitação", key="btn_rej_gestor"):
                         try:
                             cursor = conn.cursor()
-                            cursor.execute("UPDATE compras SET status = 'Rejeitado' WHERE id = %s;", (id_aprovar,))
+                            cursor.execute("UPDATE compras SET status = 'Rejeitado pelo Gestor' WHERE id = %s;", (id_aprovar,))
                             conn.commit()
                             cursor.close()
                             st.warning(f"Solicitação #{id_aprovar} rejeitada.")
@@ -91,5 +91,65 @@ def render_modulo_compras():
                             st.error(f"Erro ao rejeitar: {e}")
         except Exception as e:
             st.error(f"Erro ao carregar solicitações: {e}")
+
+    with aba_cotacao:
+        st.subheader("Cotações de Compras (3 Fornecedores)")
+        try:
+            df_cotacoes = pd.read_sql_query(
+                "SELECT id, projeto, item, quantidade, unidade, solicitante FROM compras WHERE status = 'Aprovado pelo Gestor - Aguardando Cotação'", 
+                conn
+            )
+            
+            if df_cotacoes.empty:
+                st.info("Nenhuma solicitação aguardando cotação no momento.")
+            else:
+                st.dataframe(df_cotacoes, use_container_width=True)
+                id_cotar = st.selectbox("Selecione o ID do Item para Inserir Cotações", options=df_cotacoes["id"].tolist(), key="sel_cotacao")
+                
+                # Exibe detalhes do item selecionado
+                item_selecionado = df_cotacoes[df_cotacoes["id"] == id_cotar].iloc[0]
+                st.info(f"Cotando para: **{item_selecionado['item']}** ({item_selecionado['quantidade']} {item_selecionado['unidade']}) - Projeto: {item_selecionado['projeto']}")
+                
+                with st.form("form_3_cotacoes"):
+                    st.markdown("#### Preencha os dados dos 3 Fornecedores:")
+                    
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        st.markdown("**Fornecedor 1**")
+                        f1_nome = st.text_input("Nome F1")
+                        f1_preco = st.number_input("Preço Unit. F1 (R$)", min_value=0.0, step=0.1)
+                    with c2:
+                        st.markdown("**Fornecedor 2**")
+                        f2_nome = st.text_input("Nome F2")
+                        f2_preco = st.number_input("Preço Unit. F2 (R$)", min_value=0.0, step=0.1)
+                    with c3:
+                        st.markdown("**Fornecedor 3**")
+                        f3_nome = st.text_input("Nome F3")
+                        f3_preco = st.number_input("Preço Unit. F3 (R$)", min_value=0.0, step=0.1)
+                        
+                    btn_enviar_aprovacao = st.form_submit_button("Enviar Cotações para Aprovação Final", type="primary")
+                    
+                    if btn_enviar_aprovacao:
+                        if not f1_nome or not f2_nome or not f3_nome or f1_preco <= 0 or f2_preco <= 0 or f3_preco <= 0:
+                            st.error("Preencha o nome e um preço válido para todos os 3 fornecedores.")
+                        else:
+                            try:
+                                cursor = conn.cursor()
+                                # Aqui salvamos o resumo das cotações e mudamos o status para a aprovação final dupla
+                                resumo_cotacoes = f"F1: {f1_nome} (R$ {f1_preco}) | F2: {f2_nome} (R$ {f2_preco}) | F3: {f3_nome} (R$ {f3_preco})"
+                                cursor.execute("""
+                                    UPDATE compras 
+                                    SET fornecedor_sugerido = %s, status = 'Aguardando Aprovação Final (Gestor + Diretoria)' 
+                                    WHERE id = %s;
+                                """, (resumo_cotacoes, id_cotar))
+                                conn.commit()
+                                cursor.close()
+                                st.success("🎉 Cotações registradas e enviadas para Aprovação Final da Diretoria e Gestor!")
+                                st.rerun()
+                            except Exception as e:
+                                conn.rollback()
+                                st.error(f"Erro ao salvar cotações: {e}")
+        except Exception as e:
+            st.error(f"Erro ao carregar cotações: {e}")
             
     conn.close()
