@@ -401,7 +401,6 @@ def render_modulo_compras():
             else:
                 st.dataframe(df_status, use_container_width=True)
                 
-                # Filtra apenas as aprovadas para a geração do PO/Pedido de Compra
                 df_aprovadas = df_status[df_status["status"] == 'Aprovado - Pronto para Emitir Pedido']
                 if not df_aprovadas.empty:
                     st.markdown("---")
@@ -418,25 +417,36 @@ def render_modulo_compras():
                             forn_atual = df_itens_po["fornecedor_escolhido"].iloc[0]
                             data_ped = pd.to_datetime(df_itens_po["data_pedido"].iloc[0]).strftime("%d/%m/%Y")
                             
-                            st.markdown(f"### Visualização do Pedido de Compra - SC #{sc_po:04d}")
+                            # Dados fictícios e genéricos para o comprador e fornecedor
+                            cnpj_emitente = "45.123.789/0001-99"
+                            ie_emitente = "998877665"
+                            endereco_emitente = "Rodovia Central, 500, Galpão A, Distrito Industrial, São Paulo - SP"
+                            nome_comprador = "Global Comércio e Suprimentos Ltda."
                             
-                            # Layout assemelhado ao modelo fornecido
+                            cnpj_forn = "12.345.678/0001-10"
+                            end_forn = "Rua das Indústrias, 100, Centro, Belo Horizonte - MG"
+                            tel_forn = "(31) 3333-4444"
+                            
                             st.markdown(f"""
-                            **Delta Sollutions**  
-                            **Pedido de compra N° {sc_po + 1600}**
+                            ### Pedido de Compra N° {sc_po + 1600}
+                            
+                            **Empresa Emitente (Comprador):**  
+                            **{nome_comprador}**  
+                            CNPJ: {cnpj_emitente} | IE: {ie_emitente}  
+                            Endereço: {endereco_emitente}  
                             
                             ---
-                            **Fornecedor:**  
-                            `{forn_atual}`  
                             
-                            **Empresa Compradora:**  
-                            L LEITAO DE SOUZA LTDA — CNPJ: 10.357.765/0001-37, IE: 042907500  
-                            Avenida Governador Danilo Areosa, N 1199, 69075351 - Manaus, AM  
+                            **Fornecedor:**  
+                            **{forn_atual}**  
+                            CNPJ: {cnpj_forn}  
+                            Endereço: {end_forn}  
+                            Telefone: {tel_forn}  
                             
                             **Data do Pedido:** {data_ped}  
+                            **Condição de Pagamento:** 30 dias  
                             """)
                             
-                            # Tabela de itens formatada com valor total
                             df_itens_po["Valor Total (R$)"] = df_itens_po["quantidade"] * df_itens_po["preco_escolhido"]
                             
                             st.markdown("#### Itens do Pedido de Compra")
@@ -457,10 +467,13 @@ def render_modulo_compras():
                             - **Soma das Quantidades:** {soma_qtd:,.2f}
                             - **Total de Produtos:** R$ {total_geral:,.2f}
                             - **Total do Pedido:** R$ {total_geral:,.2f}
+                            
+                            **Observações:**  
+                            Entrega conforme especificado no processo de cotação.
                             """)
                             
                             if st.button("Imprimir / Salvar Pedido de Compra", type="primary"):
-                                st.success(f"Pedido de Compra referente à SC #{sc_po:04d} gerado com sucesso para o fornecedor {forn_atual}!")
+                                st.success(f"Pedido de Compra referente à SC #{sc_po:04d} gerado com sucesso!")
         except Exception as e:
             st.error(f"Erro ao carregar status das SCs: {e}")
             
