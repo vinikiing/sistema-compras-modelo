@@ -5,7 +5,7 @@ from database import get_db_connection, obter_opcoes_destino
 def render_modulo_compras():
     st.header("Módulo de Compras")
     
-    # Identifica o usuário logado com segurança
+    # Identifica o usuário logado com segurança e de forma imutável
     user_token = st.session_state.get("usuario_logado", st.session_state.get("user_token", "admin"))
     if not user_token:
         user_token = "admin"
@@ -70,7 +70,7 @@ def render_modulo_compras():
                 st.markdown("### Itens no Lote da SC Atual:")
                 df_carrinho = pd.DataFrame(st.session_state["carrinho_sc"])
                 
-                # Configuração de alinhamento da tabela (Centralizado, exceto descrições)
+                # Configuração de alinhamento da tabela (Centralizado, exceto textos descritivos)
                 col_configs = {
                     col: st.column_config.Column(alignment="center") 
                     for col in df_carrinho.columns if col not in ['item', 'fornecedor_sugerido', 'projeto']
@@ -81,7 +81,8 @@ def render_modulo_compras():
 
                 st.dataframe(df_carrinho, column_config=col_configs, use_container_width=True)
                 
-                st.info(f"👤 **Solicitante vinculado automaticamente:** `{user_token}`")
+                # Exibe de forma fixa e imutável quem está assumindo a responsabilidade pela SC
+                st.info(f"👤 **Solicitante Vinculado (Automático):** `{user_token}` (Imutável)")
                 
                 col_btn_sc1, col_btn_sc2 = st.columns(2)
                 with col_btn_sc1:
