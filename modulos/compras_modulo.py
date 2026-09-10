@@ -70,7 +70,6 @@ def render_modulo_compras():
                 st.markdown("### Itens no Lote da SC Atual:")
                 df_carrinho = pd.DataFrame(st.session_state["carrinho_sc"])
                 
-                # Configuração de alinhamento da tabela (Centralizado, exceto textos descritivos)
                 col_configs = {
                     col: st.column_config.Column(alignment="center") 
                     for col in df_carrinho.columns if col not in ['item', 'fornecedor_sugerido', 'projeto']
@@ -81,7 +80,6 @@ def render_modulo_compras():
 
                 st.dataframe(df_carrinho, column_config=col_configs, use_container_width=True)
                 
-                # Exibe de forma fixa e imutável quem está assumindo a responsabilidade pela SC
                 st.info(f"👤 **Solicitante Vinculado (Automático):** `{user_token}` (Imutável)")
                 
                 col_btn_sc1, col_btn_sc2 = st.columns(2)
@@ -196,21 +194,72 @@ def render_modulo_compras():
                         condicao_pagamento = st.selectbox("Condição de Pagamento *", options=["À vista", "15 dias", "30 dias", "30 / 60 dias", "30 / 60 / 90 dias", "Outros"], index=2, key=f"cond_{sc_selecionada}")
                     
                     col_f1, col_f2, col_f3 = st.columns(3)
+                    
                     with col_f1:
                         st.markdown("##### Fornecedor 1")
                         sup1_nome = st.text_input("Nome F1", value=default_f1, key=f"sup1_{sc_selecionada}")
+                        
+                        c_moeda1, c_val1 = st.columns(2)
+                        with c_moeda1:
+                            sup1_moeda = st.selectbox("Moeda", ["BRL", "USD", "EUR"], key=f"moeda1_{sc_selecionada}")
+                        with c_val1:
+                            sup1_validade = st.date_input("Validade Proposta", key=f"val1_{sc_selecionada}")
+                            
                         sup1_prazo = st.number_input("Prazo de Entrega (Dias)", min_value=0, value=default_p1, key=f"p1_{sc_selecionada}")
-                        sup1_frete = st.number_input("Valor do Frete (R$)", min_value=0.0, value=default_fr1, format="%.2f", key=f"fr1_{sc_selecionada}")
+                        
+                        c_ftipo1, c_fval1 = st.columns(2)
+                        with c_ftipo1:
+                            sup1_tipo_frete = st.selectbox("Frete", ["CIF", "FOB"], key=f"tftype1_{sc_selecionada}")
+                        with c_fval1:
+                            if sup1_tipo_frete == "CIF":
+                                st.number_input("Valor Frete", value=0.0, disabled=True, key=f"fr1_dis_{sc_selecionada}")
+                                sup1_frete = 0.0
+                            else:
+                                sup1_frete = st.number_input("Valor Frete", min_value=0.0, value=default_fr1, format="%.2f", key=f"fr1_{sc_selecionada}")
+
                     with col_f2:
                         st.markdown("##### Fornecedor 2")
                         sup2_nome = st.text_input("Nome F2", value=default_f2, key=f"sup2_{sc_selecionada}")
+                        
+                        c_moeda2, c_val2 = st.columns(2)
+                        with c_moeda2:
+                            sup2_moeda = st.selectbox("Moeda", ["BRL", "USD", "EUR"], key=f"moeda2_{sc_selecionada}")
+                        with c_val2:
+                            sup2_validade = st.date_input("Validade Proposta", key=f"val2_{sc_selecionada}")
+                            
                         sup2_prazo = st.number_input("Prazo de Entrega (Dias)", min_value=0, value=default_p2, key=f"p2_{sc_selecionada}")
-                        sup2_frete = st.number_input("Valor do Frete (R$)", min_value=0.0, value=default_fr2, format="%.2f", key=f"fr2_{sc_selecionada}")
+                        
+                        c_ftipo2, c_fval2 = st.columns(2)
+                        with c_ftipo2:
+                            sup2_tipo_frete = st.selectbox("Frete", ["CIF", "FOB"], key=f"tftype2_{sc_selecionada}")
+                        with c_fval2:
+                            if sup2_tipo_frete == "CIF":
+                                st.number_input("Valor Frete", value=0.0, disabled=True, key=f"fr2_dis_{sc_selecionada}")
+                                sup2_frete = 0.0
+                            else:
+                                sup2_frete = st.number_input("Valor Frete", min_value=0.0, value=default_fr2, format="%.2f", key=f"fr2_{sc_selecionada}")
+
                     with col_f3:
                         st.markdown("##### Fornecedor 3")
                         sup3_nome = st.text_input("Nome F3", value=default_f3, key=f"sup3_{sc_selecionada}")
+                        
+                        c_moeda3, c_val3 = st.columns(2)
+                        with c_moeda3:
+                            sup3_moeda = st.selectbox("Moeda", ["BRL", "USD", "EUR"], key=f"moeda3_{sc_selecionada}")
+                        with c_val3:
+                            sup3_validade = st.date_input("Validade Proposta", key=f"val3_{sc_selecionada}")
+                            
                         sup3_prazo = st.number_input("Prazo de Entrega (Dias)", min_value=0, value=default_p3, key=f"p3_{sc_selecionada}")
-                        sup3_frete = st.number_input("Valor do Frete (R$)", min_value=0.0, value=default_fr3, format="%.2f", key=f"fr3_{sc_selecionada}")
+                        
+                        c_ftipo3, c_fval3 = st.columns(2)
+                        with c_ftipo3:
+                            sup3_tipo_frete = st.selectbox("Frete", ["CIF", "FOB"], key=f"tftype3_{sc_selecionada}")
+                        with c_fval3:
+                            if sup3_tipo_frete == "CIF":
+                                st.number_input("Valor Frete", value=0.0, disabled=True, key=f"fr3_dis_{sc_selecionada}")
+                                sup3_frete = 0.0
+                            else:
+                                sup3_frete = st.number_input("Valor Frete", min_value=0.0, value=default_fr3, format="%.2f", key=f"fr3_{sc_selecionada}")
                     
                     st.markdown("---")
                     st.markdown("**Preencha os preços unitários para cada item abaixo:**")
@@ -226,9 +275,9 @@ def render_modulo_compras():
                             "item": st.column_config.TextColumn("Item", disabled=True),
                             "quantidade": st.column_config.NumberColumn("Qtd", disabled=True),
                             "unidade": st.column_config.TextColumn("Un", disabled=True),
-                            "f1_preco": st.column_config.NumberColumn("Preço F1 (R$)", min_value=0.0, format="R$ %.2f"),
-                            "f2_preco": st.column_config.NumberColumn("Preço F2 (R$)", min_value=0.0, format="R$ %.2f"),
-                            "f3_preco": st.column_config.NumberColumn("Preço F3 (R$)", min_value=0.0, format="R$ %.2f"),
+                            "f1_preco": st.column_config.NumberColumn(f"Preço F1 ({sup1_moeda})", min_value=0.0, format="%.2f"),
+                            "f2_preco": st.column_config.NumberColumn(f"Preço F2 ({sup2_moeda})", min_value=0.0, format="%.2f"),
+                            "f3_preco": st.column_config.NumberColumn(f"Preço F3 ({sup3_moeda})", min_value=0.0, format="%.2f"),
                         },
                         hide_index=True,
                         key=f"editor_sc_{sc_selecionada}"
@@ -381,7 +430,6 @@ def render_modulo_compras():
                                         cursor = conn.cursor()
                                         cursor.execute("UPDATE compras SET status = 'Aprovado - Pronto para Emitir Pedido' WHERE numero_sc = %s AND status = 'Aguardando Aprovação Gerente Geral';", (sc_row['numero_sc'],))
                                         
-                                        # Integração automática com o almoxarifado ("A Chegar")
                                         cursor.execute("SELECT projeto, item, quantidade, unidade, fornecedor_escolhido, preco_escolhido FROM compras WHERE numero_sc = %s AND status = 'Aprovado - Pronto para Emitir Pedido';", (sc_row['numero_sc'],))
                                         itens_aprovados = cursor.fetchall()
                                         
@@ -391,7 +439,7 @@ def render_modulo_compras():
                                                 INSERT INTO estoque (codigo, item, quantidade, unidade, preco_unitario, ultimo_fornecedor, localizacao)
                                                 VALUES (%s, %s, %s, %s, %s, %s, %s);
                                             """, (f"SC-{sc_row['numero_sc']:04d}", itm, qtd, und, preco, forn, loc_trand))
-                                            
+                                        
                                         conn.commit()
                                         cursor.close()
                                         st.success(f"SC #{sc_row['numero_sc']:04d} aprovada no Nível 2 e enviada para 'A Chegar' no almoxarifado!")
@@ -444,7 +492,6 @@ def render_modulo_compras():
                                 data_ped = pd.to_datetime(df_itens_po["data_pedido"].iloc[0]).strftime("%d/%m/%Y")
                                 cond_pgto = df_itens_po["condicao_pagamento"].iloc[0]
                                 
-                                # Numeração do PO começando estritamente em 01
                                 po_numero_formatado = f"{sc_po:02d}"
                                 
                                 cnpj_emitente = "45.123.789/0001-99"
