@@ -2,7 +2,6 @@ import os
 import sys
 import streamlit as st
 
-# Configuração da página Streamlit com a sua Logo Delta como Favicon
 st.set_page_config(
     page_title="Portal Delta - Suprimentos & Estoque",
     page_icon="logo_delta.png",
@@ -15,7 +14,18 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 import database as db
-from modulos import saving_projetos, estoque, almoxarife, configuracoes
+
+# Importação segura de módulos para evitar erros de diretório
+try:
+    from modulos import saving_projetos, estoque, almoxarife, configuracoes
+except ImportError:
+    try:
+        import saving_projetos
+        import estoque
+        import almoxarife
+        import configuracoes
+    except ImportError:
+        saving_projetos = estoque = almoxarife = configuracoes = None
 
 # Inicializa banco de dados e estrutura de tabelas
 try:
@@ -38,7 +48,6 @@ if "permissoes" not in st.session_state:
 # AUTO-RECOVERY DA SESSÃO VIA URL (EVITA LOGOUT NO RAILWAY)
 # ---------------------------------------------------------
 def tentar_restaurar_sessao_url():
-    """Se o Railway reiniciar o contêiner, esta função lê o token da URL e religa o usuário."""
     if not st.session_state["logged_in"]:
         usuario_token = st.query_params.get("user_token", None)
         if usuario_token:
@@ -77,13 +86,11 @@ def tentar_restaurar_sessao_url():
             except Exception:
                 pass
 
-
-# Executa a verificação automática de login ao carregar a página
 tentar_restaurar_sessao_url()
 
 
 # ---------------------------------------------------------
-# TELA DE LOGIN (COM COLUNAS NATIVAS PERFEITAS)
+# TELA DE LOGIN
 # ---------------------------------------------------------
 def tela_login():
     st.markdown("""
@@ -91,7 +98,6 @@ def tela_login():
         .stApp {
             background-color: #0e1117;
         }
-        /* Caixa de login centralizada */
         div[data-testid="stForm"] {
             background-color: #161b22;
             padding: 30px;
@@ -104,11 +110,9 @@ def tela_login():
         </style>
     """, unsafe_allow_html=True)
 
-    # Coluna central ampla da página
     _, col_centro, _ = st.columns([1, 1.4, 1])
     
     with col_centro:
-        # Sub-colunas para alinhar perfeitamente a logo do lado do título no centro
         _, col_l, col_t, _ = st.columns([0.2, 0.8, 2.2, 0.2])
         
         with col_l:
@@ -119,7 +123,7 @@ def tela_login():
             st.markdown("<h2 style='color: #38bdf8; margin: 0px; line-height: 1.1;'>Portal Delta</h2>", unsafe_allow_html=True)
             st.markdown("<p style='color: #94a3b8; margin: 0px; font-size: 13px;'>Suprimentos & Estoque</p>", unsafe_allow_html=True)
         
-        st.write("") # Espaçamento leve
+        st.write("")
         
         with st.form("form_login_portal", clear_on_submit=False):
             st.markdown("<h4 style='color: #f0f6fc; margin-bottom: 15px;'>🔐 Acesso ao Sistema</h4>", unsafe_allow_html=True)
@@ -189,13 +193,12 @@ def tela_login():
 
 
 # ---------------------------------------------------------
-# PAINEL PRINCIPAL & NAVEGAÇÃO (DESIGN MODERNO EXPANSÍVEL)
+# PAINEL PRINCIPAL & NAVEGAÇÃO EXPANSÍVEL
 # ---------------------------------------------------------
 def painel_principal():
     perfil_atual = st.session_state["perfil"]
 
     with st.sidebar:
-        # Cabeçalho da Barra Lateral com Logo e Nome
         col_img, col_txt = st.columns([1, 3])
         with col_img:
             if os.path.exists("logo_delta.png"):
@@ -205,7 +208,6 @@ def painel_principal():
         st.caption("Suprimentos & Estoque")
         st.divider()
 
-        # Árvore de Navegação em Blocos Expansíveis (Estilo Dashboard Moderno)
         modulo_escolhido = None
 
         if perfil_atual == "Gestão Geral":
@@ -239,11 +241,9 @@ def painel_principal():
             if mod_sis:
                 modulo_escolhido = mod_sis
 
-        # Espaçador dinâmico para empurrar o perfil para o rodapé
         st.markdown("<br>" * 6, unsafe_allow_html=True)
         st.divider()
 
-        # Rodapé com Identificação do Usuário Logado e Logout
         col_avatar, col_info = st.columns([1, 3])
         with col_avatar:
             inicial = st.session_state['usuario_logado'][0].upper() if st.session_state['usuario_logado'] else "U"
@@ -260,24 +260,25 @@ def painel_principal():
             st.query_params.clear()
             st.rerun()
 
-    # Roteamento dos Módulos com base na seleção da barra lateral
-    if modulo_escolhido == "Saving & Projetos":
+    # Roteamento seguro dos módulos
+    if modulo_escolhido == "Saving & Projetos" and saving_projetos:
         if perfil_atual == "Gestão Geral":
             saving_projetos.render(perfil_atual)
         else:
             st.error("Acesso não autorizado.")
-    elif modulo_escolhido == "Controle de Estoque":
+    elif modulo_escolhido == "Controle de Estoque" and estoque:
         estoque.render(perfil_atual)
-    elif modulo_escolhido == "Endereçamento (Almoxarifado)":
+    elif modulo_escolhido == "Endereçamento (Almoxarifado)" and almoxarife:
         almoxarife.render_enderecamento()
-    elif modulo_escolhido == "Configurações":
+    elif modulo_escolhido == "Configurações" and configuracoes:
         configuracoes.render(perfil_atual)
     else:
-        # Fallback padrão seguro
-        if perfil_atual == "Gestão Geral":
+        if perfil_atual == "Gestão Geral" and saving_projetos:
             saving_projetos.render(perfil_atual)
-        else:
+        elif estoque:
             estoque.render(perfil_atual)
+        else:
+            st.info("Selecione um módulo na barra lateral.")
 
 
 # ---------------------------------------------------------
