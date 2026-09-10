@@ -15,17 +15,18 @@ if ROOT_DIR not in sys.path:
 
 import database as db
 
-# Importação segura de módulos para evitar erros de diretório
+# Importação segura de módulos (incluindo compras)
 try:
-    from modulos import saving_projetos, estoque, almoxarife, configuracoes
+    from modulos import compras, saving_projetos, estoque, almoxarife, configuracoes
 except ImportError:
     try:
+        import compras
         import saving_projetos
         import estoque
         import almoxarife
         import configuracoes
     except ImportError:
-        saving_projetos = estoque = almoxarife = configuracoes = None
+        compras = saving_projetos = estoque = almoxarife = configuracoes = None
 
 # Inicializa banco de dados e estrutura de tabelas
 try:
@@ -45,7 +46,7 @@ if "permissoes" not in st.session_state:
 
 
 # ---------------------------------------------------------
-# AUTO-RECOVERY DA SESSÃO VIA URL (EVITA LOGOUT NO RAILWAY)
+# AUTO-RECOVERY DA SESSÃO VIA URL
 # ---------------------------------------------------------
 def tentar_restaurar_sessao_url():
     if not st.session_state["logged_in"]:
@@ -224,7 +225,7 @@ def painel_principal():
         with st.expander("📦 Materiais & Estoque", expanded=True):
             mod_mat = st.radio(
                 "Materiais",
-                ["Controle de Estoque", "Endereçamento (Almoxarifado)"],
+                ["Módulo de Compras", "Controle de Estoque", "Endereçamento (Almoxarifado)"],
                 key="nav_materiais",
                 label_visibility="collapsed"
             )
@@ -260,8 +261,10 @@ def painel_principal():
             st.query_params.clear()
             st.rerun()
 
-    # Roteamento seguro dos módulos
-    if modulo_escolhido == "Saving & Projetos" and saving_projetos:
+    # Roteamento seguro dos módulos incluindo o Módulo de Compras
+    if modulo_escolhido == "Módulo de Compras" and compras:
+        compras.render(perfil_atual)
+    elif modulo_escolhido == "Saving & Projetos" and saving_projetos:
         if perfil_atual == "Gestão Geral":
             saving_projetos.render(perfil_atual)
         else:
@@ -273,8 +276,8 @@ def painel_principal():
     elif modulo_escolhido == "Configurações" and configuracoes:
         configuracoes.render(perfil_atual)
     else:
-        if perfil_atual == "Gestão Geral" and saving_projetos:
-            saving_projetos.render(perfil_atual)
+        if compras:
+            compras.render(perfil_atual)
         elif estoque:
             estoque.render(perfil_atual)
         else:
