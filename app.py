@@ -2,10 +2,10 @@ import os
 import sys
 import streamlit as st
 
-# Configuração da página Streamlit
+# Configuração da página Streamlit com a sua Logo Delta como Favicon
 st.set_page_config(
-    page_title="Portal Gestão Pro - Compras & Estoque",
-    page_icon="📦",
+    page_title="Portal Delta - Suprimentos & Estoque",
+    page_icon="logo_delta.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -15,8 +15,7 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 import database as db
-# Removido 'almoxarife' e garantindo que 'estoque' aponte para o nosso unificado
-from modulos import saving_projetos, estoque, configuracoes, compras_modulo
+from modulos import saving_projetos, estoque, almoxarife, configuracoes
 
 # Inicializa banco de dados e estrutura de tabelas
 try:
@@ -84,7 +83,7 @@ tentar_restaurar_sessao_url()
 
 
 # ---------------------------------------------------------
-# TELA DE LOGIN
+# TELA DE LOGIN (COM COLUNAS NATIVAS PERFEITAS)
 # ---------------------------------------------------------
 def tela_login():
     st.markdown("""
@@ -92,6 +91,7 @@ def tela_login():
         .stApp {
             background-color: #0e1117;
         }
+        /* Caixa de login centralizada */
         div[data-testid="stForm"] {
             background-color: #161b22;
             padding: 30px;
@@ -104,22 +104,22 @@ def tela_login():
         </style>
     """, unsafe_allow_html=True)
 
+    # Coluna central ampla da página
     _, col_centro, _ = st.columns([1, 1.4, 1])
     
     with col_centro:
+        # Sub-colunas para alinhar perfeitamente a logo do lado do título no centro
         _, col_l, col_t, _ = st.columns([0.2, 0.8, 2.2, 0.2])
         
         with col_l:
-            if os.path.exists("logo_sistema.png"):
-                st.image("logo_sistema.png", width=70)
-            else:
-                st.markdown("<h1 style='margin:0px;'>📦</h1>", unsafe_allow_html=True)
+            if os.path.exists("logo_delta.png"):
+                st.image("logo_delta.png", width=70)
                 
         with col_t:
-            st.markdown("<h2 style='color: #38bdf8; margin: 0px; line-height: 1.1;'>Portal Gestão Pro</h2>", unsafe_allow_html=True)
+            st.markdown("<h2 style='color: #38bdf8; margin: 0px; line-height: 1.1;'>Portal Delta</h2>", unsafe_allow_html=True)
             st.markdown("<p style='color: #94a3b8; margin: 0px; font-size: 13px;'>Suprimentos & Estoque</p>", unsafe_allow_html=True)
         
-        st.write("")
+        st.write("") # Espaçamento leve
         
         with st.form("form_login_portal", clear_on_submit=False):
             st.markdown("<h4 style='color: #f0f6fc; margin-bottom: 15px;'>🔐 Acesso ao Sistema</h4>", unsafe_allow_html=True)
@@ -189,50 +189,95 @@ def tela_login():
 
 
 # ---------------------------------------------------------
-# PAINEL PRINCIPAL & NAVEGAÇÃO
+# PAINEL PRINCIPAL & NAVEGAÇÃO (DESIGN MODERNO EXPANSÍVEL)
 # ---------------------------------------------------------
 def painel_principal():
-    st.sidebar.markdown(f"### 👤 {st.session_state['usuario_logado']}")
-    st.sidebar.caption(f"Perfil: **{st.session_state['perfil']}**")
-    st.sidebar.divider()
-
-    st.sidebar.markdown("### Navegação do Sistema:")
-    
     perfil_atual = st.session_state["perfil"]
-    
-    opcoes_menu = []
-    if perfil_atual == "Gestão Geral":
-        opcoes_menu.append("📊 Saving & Projetos")
-        
-    opcoes_menu.extend([
-        "🛒 Módulo de Compras",
-        "📦 Controle de Estoque & Almoxarifado",
-        "⚙️ Configurações"
-    ])
 
-    modulo_sel = st.sidebar.radio("Selecione o Módulo:", opcoes_menu)
+    with st.sidebar:
+        # Cabeçalho da Barra Lateral com Logo e Nome
+        col_img, col_txt = st.columns([1, 3])
+        with col_img:
+            if os.path.exists("logo_delta.png"):
+                st.image("logo_delta.png", width=35)
+        with col_txt:
+            st.markdown("##### Portal Delta")
+        st.caption("Suprimentos & Estoque")
+        st.divider()
 
-    st.sidebar.divider()
-    if st.sidebar.button("🚪 Sair / Logout", use_container_width=True):
-        st.session_state["logged_in"] = False
-        st.session_state["usuario_logado"] = ""
-        st.session_state["perfil"] = "Consulta"
-        st.session_state["permissoes"] = {}
-        st.query_params.clear()
-        st.rerun()
+        # Árvore de Navegação em Blocos Expansíveis (Estilo Dashboard Moderno)
+        modulo_escolhido = None
 
-    # Roteamento dos Módulos
-    if modulo_sel == "📊 Saving & Projetos":
+        if perfil_atual == "Gestão Geral":
+            with st.expander("📊 Projetos & Gestão", expanded=False):
+                mod_proj = st.radio(
+                    "Projetos",
+                    ["Saving & Projetos"],
+                    key="nav_saving",
+                    label_visibility="collapsed"
+                )
+                if mod_proj:
+                    modulo_escolhido = mod_proj
+
+        with st.expander("📦 Materiais & Estoque", expanded=True):
+            mod_mat = st.radio(
+                "Materiais",
+                ["Controle de Estoque", "Endereçamento (Almoxarifado)"],
+                key="nav_materiais",
+                label_visibility="collapsed"
+            )
+            if mod_mat:
+                modulo_escolhido = mod_mat
+
+        with st.expander("⚙️ Sistema", expanded=False):
+            mod_sis = st.radio(
+                "Sistema",
+                ["Configurações"],
+                key="nav_config",
+                label_visibility="collapsed"
+            )
+            if mod_sis:
+                modulo_escolhido = mod_sis
+
+        # Espaçador dinâmico para empurrar o perfil para o rodapé
+        st.markdown("<br>" * 6, unsafe_allow_html=True)
+        st.divider()
+
+        # Rodapé com Identificação do Usuário Logado e Logout
+        col_avatar, col_info = st.columns([1, 3])
+        with col_avatar:
+            inicial = st.session_state['usuario_logado'][0].upper() if st.session_state['usuario_logado'] else "U"
+            st.markdown(f"**[{inicial}]**")
+        with col_info:
+            st.markdown(f"**{st.session_state['usuario_logado']}**")
+            st.caption(f"Perfil: {perfil_atual}")
+
+        if st.button("🚪 Sair / Logout", use_container_width=True):
+            st.session_state["logged_in"] = False
+            st.session_state["usuario_logado"] = ""
+            st.session_state["perfil"] = "Consulta"
+            st.session_state["permissoes"] = {}
+            st.query_params.clear()
+            st.rerun()
+
+    # Roteamento dos Módulos com base na seleção da barra lateral
+    if modulo_escolhido == "Saving & Projetos":
         if perfil_atual == "Gestão Geral":
             saving_projetos.render(perfil_atual)
         else:
             st.error("Acesso não autorizado.")
-    elif modulo_sel == "🛒 Módulo de Compras":
-        compras_modulo.render_modulo_compras()
-    elif modulo_sel == "📦 Controle de Estoque & Almoxarifado":
+    elif modulo_escolhido == "Controle de Estoque":
         estoque.render(perfil_atual)
-    elif modulo_sel == "⚙️ Configurações":
+    elif modulo_escolhido == "Endereçamento (Almoxarifado)":
+        almoxarife.render_enderecamento()
+    elif modulo_escolhido == "Configurações":
         configuracoes.render(perfil_atual)
+    else:
+        # Fallback padrão seguro
+        if perfil_atual == "Gestão Geral":
+            saving_projetos.render(perfil_atual)
+        else:
+            estoque.render(perfil_atual)
 
 
 # ---------------------------------------------------------
