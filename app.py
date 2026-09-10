@@ -15,20 +15,20 @@ if ROOT_DIR not in sys.path:
 
 import database as db
 
-# Importações blindadas contra qualquer variação de nome de arquivo
-def safe_import(module_names):
-    for name in module_names:
-        try:
-            return __import__(name, fromlist=['*'])
-        except ImportError:
-            continue
-    return None
-
-compras = safe_import(['compras', 'modulo_compras', 'modulos.compras', 'modulos.modulo_compras'])
-saving_projetos = safe_import(['saving_projetos', 'modulos.saving_projetos'])
-estoque = safe_import(['estoque', 'modulos.estoque'])
-almoxarife = safe_import(['almoxarife', 'modulos.almoxarife'])
-configuracoes = safe_import(['configuracoes', 'modulos.configuracoes'])
+# Importações corretas baseadas na sua pasta 'modulos'
+try:
+    from modulos import compras_modulo as compras
+    from modulos import saving_projetos
+    from modulos import estoque
+    from modulos import configuracoes
+except ImportError:
+    try:
+        import compras_modulo as compras
+        import saving_projetos
+        import estoque
+        import configuracoes
+    except ImportError:
+        compras = saving_projetos = estoque = configuracoes = None
 
 # Inicializa banco de dados e estrutura de tabelas
 try:
@@ -261,10 +261,15 @@ def painel_principal():
         else:
             st.error("O módulo de estoque não foi encontrado.")
     elif modulo_sel == "📍 Endereçamento (Almoxarifado)":
-        if almoxarife and hasattr(almoxarife, 'render_enderecamento'):
-            almoxarife.render_enderecamento()
+        if estoque:
+            if hasattr(estoque, 'render_enderecamento'):
+                estoque.render_enderecamento()
+            elif hasattr(estoque, 'render'):
+                estoque.render(perfil_atual)
+            else:
+                st.error("Função de endereçamento não encontrada no módulo de estoque.")
         else:
-            st.error("O módulo de almoxarifado não foi encontrado.")
+            st.error("O módulo de estoque não foi encontrado.")
     elif modulo_sel == "⚙️ Configurações":
         if configuracoes and hasattr(configuracoes, 'render'):
             configuracoes.render(perfil_atual)
