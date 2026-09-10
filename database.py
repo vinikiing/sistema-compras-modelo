@@ -38,33 +38,9 @@ def init_db():
     """)
 
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS lancamentos (
-            id SERIAL PRIMARY KEY,
-            projeto VARCHAR(255) NOT NULL,
-            setor VARCHAR(100),
-            item VARCHAR(255),
-            qtd NUMERIC(10,2) DEFAULT 1,
-            preco_inicial NUMERIC(12,2) DEFAULT 0.0,
-            preco_fechado NUMERIC(12,2) DEFAULT 0.0,
-            fornecedor VARCHAR(255)
-        );
-    """)
-
-    cursor.execute("""
         CREATE TABLE IF NOT EXISTS centros_custo (
             id SERIAL PRIMARY KEY,
             nome_centro VARCHAR(255) UNIQUE NOT NULL
-        );
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS depara_fornecedor (
-            id SERIAL PRIMARY KEY,
-            cnpj_fornecedor VARCHAR(20) NOT NULL,
-            codigo_fornecedor VARCHAR(100) NOT NULL,
-            descricao_nota VARCHAR(255),
-            id_estoque INTEGER NOT NULL,
-            CONSTRAINT uq_depara UNIQUE (cnpj_fornecedor, codigo_fornecedor)
         );
     """)
 
@@ -75,40 +51,9 @@ def init_db():
             password VARCHAR(100) NOT NULL,
             perfil VARCHAR(50) NOT NULL,
             pode_ver_saving BOOLEAN DEFAULT TRUE,
-            pode_importar_saving BOOLEAN DEFAULT FALSE,
-            pode_gerenciar_budgets BOOLEAN DEFAULT FALSE,
             pode_consultar_estoque BOOLEAN DEFAULT TRUE,
-            pode_dar_entrada_estoque BOOLEAN DEFAULT FALSE,
-            pode_dar_baixa_estoque BOOLEAN DEFAULT FALSE,
-            pode_enderecar_estoque BOOLEAN DEFAULT FALSE,
-            pode_transferir_estoque BOOLEAN DEFAULT FALSE,
-            pode_estornar_estoque BOOLEAN DEFAULT FALSE,
             pode_ver_relatorios BOOLEAN DEFAULT TRUE,
             e_admin BOOLEAN DEFAULT FALSE
-        );
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS historico_estoque (
-            id SERIAL PRIMARY KEY,
-            data_movimentacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            tipo_movimentacao VARCHAR(50),
-            item VARCHAR(255),
-            quantidade NUMERIC(10,2),
-            unidade VARCHAR(20),
-            localizacao VARCHAR(255),
-            projeto_motivo VARCHAR(255),
-            retirado_por VARCHAR(100),
-            usuario_sistema VARCHAR(100)
-        );
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS historico_logins (
-            id SERIAL PRIMARY KEY,
-            data_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            username VARCHAR(100),
-            perfil VARCHAR(50)
         );
     """)
 
@@ -136,6 +81,7 @@ def init_db():
             f3_preco NUMERIC(12,2) DEFAULT 0.0,
             f3_prazo INTEGER DEFAULT 0,
             f3_frete NUMERIC(12,2) DEFAULT 0.0,
+            condicao_pagamento VARCHAR(100) DEFAULT '30 dias',
             fornecedor_escolhido VARCHAR(255),
             preco_escolhido NUMERIC(12,2) DEFAULT 0.0,
             cotacao_concluida BOOLEAN DEFAULT FALSE
@@ -149,25 +95,17 @@ def init_db():
     """)
     conn.commit()
 
+    # Garante colunas caso a tabela já exista
     colunas_extras = [
-        ("numero_sc", "INTEGER DEFAULT 1"),
-        ("f1_nome", "VARCHAR(255)"),
-        ("f1_preco", "NUMERIC(12,2) DEFAULT 0.0"),
+        ("condicao_pagamento", "VARCHAR(100) DEFAULT '30 dias'"),
         ("f1_prazo", "INTEGER DEFAULT 0"),
         ("f1_frete", "NUMERIC(12,2) DEFAULT 0.0"),
-        ("f2_nome", "VARCHAR(255)"),
-        ("f2_preco", "NUMERIC(12,2) DEFAULT 0.0"),
         ("f2_prazo", "INTEGER DEFAULT 0"),
         ("f2_frete", "NUMERIC(12,2) DEFAULT 0.0"),
-        ("f3_nome", "VARCHAR(255)"),
-        ("f3_preco", "NUMERIC(12,2) DEFAULT 0.0"),
         ("f3_prazo", "INTEGER DEFAULT 0"),
         ("f3_frete", "NUMERIC(12,2) DEFAULT 0.0"),
-        ("fornecedor_escolhido", "VARCHAR(255)"),
-        ("preco_escolhido", "NUMERIC(12,2) DEFAULT 0.0"),
         ("cotacao_concluida", "BOOLEAN DEFAULT FALSE")
     ]
-
     for col_nome, col_tipo in colunas_extras:
         try:
             cursor.execute(f"ALTER TABLE compras ADD COLUMN IF NOT EXISTS {col_nome} {col_tipo};")
