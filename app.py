@@ -265,7 +265,7 @@ def painel_principal():
             if os.path.exists("logo_delta.png"):
                 st.image("logo_delta.png", width=35)
         with col_txt:
-            st.markdown("##### Portal Delta")
+            st.markdown("##### Portal V&B")
         st.caption("Suprimentos & Estoque")
         st.divider()
 
