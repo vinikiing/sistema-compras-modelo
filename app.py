@@ -4,7 +4,7 @@ import streamlit as st
 import inspect
 
 st.set_page_config(
-    page_title="Portal Delta - Suprimentos & Estoque",
+    page_title="Portal - Suprimentos & Estoque",
     page_icon="logo_delta.png",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -197,14 +197,13 @@ def tela_login():
 
 
 # ---------------------------------------------------------
-# EXECUTOR BLINDADO (EXCLUI IMPORTS E FUNÇÕES DE BANCO)
+# EXECUTOR BLINDADO
 # ---------------------------------------------------------
 def executar_modulo(modulo, perfil):
     if not modulo:
         st.error("Módulo não encontrado.")
         return
 
-    # 1. Procura primeiro pelos nomes oficiais padrão de renderização
     for nome_func in ['render', 'main', 'run', 'app', 'exibir', 'tela_compras']:
         if hasattr(modulo, nome_func):
             func = getattr(modulo, nome_func)
@@ -225,7 +224,6 @@ def executar_modulo(modulo, perfil):
                     st.exception(e)
                     return
 
-    # 2. Fallback seguro: pega apenas funções definidas DIRETAMENTE no arquivo do módulo
     funcoes_excluidas = ['get_db_connection', 'init_db', 'conectar', 'query', 'db_connect', 'carregar_dados']
     funcs = [
         o for o in inspect.getmembers(modulo, inspect.isfunction) 
@@ -273,7 +271,7 @@ def painel_principal():
 
         st.markdown("### Navegação do Sistema")
 
-        opcoes_menu = ["🛒 Módulo de Compras", "📦 Controle de Estoque", "📍 Endereçamento (Almoxarifado)"]
+        opcoes_menu = ["🛒 Compras", "📦 Estoque"]
         
         if perfil_atual == "Gestão Geral":
             opcoes_menu.insert(0, "📊 Saving & Projetos")
@@ -301,21 +299,16 @@ def painel_principal():
             st.query_params.clear()
             st.rerun()
 
-    # Roteamento dinâmico
-    if modulo_sel == "🛒 Módulo de Compras":
+    # Roteamento dinâmico limpo e integrado
+    if modulo_sel == "🛒 Compras":
         executar_modulo(compras, perfil_atual)
     elif modulo_sel == "📊 Saving & Projetos":
         if perfil_atual == "Gestão Geral":
             executar_modulo(saving_projetos, perfil_atual)
         else:
             st.error("Acesso não autorizado.")
-    elif modulo_sel == "📦 Controle de Estoque":
+    elif modulo_sel == "📦 Estoque":
         executar_modulo(estoque, perfil_atual)
-    elif modulo_sel == "📍 Endereçamento (Almoxarifado)":
-        if estoque and hasattr(estoque, 'render_enderecamento'):
-            estoque.render_enderecamento()
-        else:
-            executar_modulo(estoque, perfil_atual)
     elif modulo_sel == "⚙️ Configurações":
         executar_modulo(configuracoes, perfil_atual)
 
