@@ -191,7 +191,11 @@ def render_modulo_compras():
                     
                     col_cond1, col_cond2 = st.columns(2)
                     with col_cond1:
-                        condicao_pagamento = st.selectbox("Condição de Pagamento *", options=["À vista", "15 dias", "30 dias", "30 / 60 dias", "30 / 60 / 90 dias", "Outros"], index=2, key=f"cond_{sc_selecionada}")
+                        cond_opcao = st.selectbox("Condição de Pagamento *", options=["À vista", "15 dias", "30 dias", "30 / 60 dias", "30 / 60 / 90 dias", "Outros"], index=2, key=f"cond_{sc_selecionada}")
+                        if cond_opcao == "Outros":
+                            condicao_pagamento = st.text_input("Especifique a Condição de Pagamento *", key=f"outro_cond_{sc_selecionada}")
+                        else:
+                            condicao_pagamento = cond_opcao
                     
                     col_f1, col_f2, col_f3 = st.columns(3)
                     
@@ -286,6 +290,8 @@ def render_modulo_compras():
                     if st.button("Salvar e Processar Itens Concluídos", type="primary"):
                         if not sup1_nome or not sup2_nome or not sup3_nome:
                             st.error("Informe o nome dos 3 fornecedores nos campos acima.")
+                        elif cond_opcao == "Outros" and not condicao_pagamento:
+                            st.error("Por favor, especifique a condição de pagamento no campo 'Outros'.")
                         else:
                             try:
                                 cursor = conn.cursor()
