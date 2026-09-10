@@ -132,7 +132,15 @@ def render(perfil_atual):
                             mask = mask | df_estoque[col].astype(str).str.lower().str.contains(termo, na=False)
                     df_estoque = df_estoque[mask]
 
-                st.dataframe(df_estoque, use_container_width=True)
+                # Configura o alinhamento: Centraliza todas as colunas, exceto 'item' que fica à esquerda
+                column_configs = {
+                    col: st.column_config.Column(alignment="center") 
+                    for col in df_estoque.columns if col != 'item'
+                }
+                if 'item' in df_estoque.columns:
+                    column_configs['item'] = st.column_config.Column(alignment="left")
+
+                st.dataframe(df_estoque, column_config=column_configs, use_container_width=True)
             else:
                 st.info("Nenhum item cadastrado no estoque atualmente.")
         except Exception as e:
