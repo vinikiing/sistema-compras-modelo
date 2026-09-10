@@ -16,16 +16,17 @@ def render(perfil_atual):
     except Exception:
         pass
 
-    st.title("Configurações do Sistema e Controle de Acessos")
+    st.title("Configuracoes do Sistema e Controle de Acessos")
 
-    is_admin_config = perfil_atual == "Gestão Geral"
+    # Apenas o perfil Gestor Geral / Administrador tem acesso total às abas de gestão
+    is_admin_config = perfil_atual in ["Gestao Geral", "Administrador"]
 
     if is_admin_config:
         tab_minha_s, tab_gestao_u, tab_cc_gest, tab_hist_access = st.tabs([
             "Minha Senha",
-            "Controle Personalizado de Usuários",
+            "Controle Personalizado de Usuarios",
             "Gerenciar Centros de Custo",
-            "Histórico de Acessos"
+            "Historico de Acessos"
         ])
     else:
         tab_minha_s = st.container()
@@ -55,7 +56,7 @@ def render(perfil_atual):
 
     if tab_gestao_u and is_admin_config:
         with tab_gestao_u:
-            st.subheader("Lista de Usuários Cadastrados")
+            st.subheader("Lista de Usuarios Cadastrados")
 
             conn = db.get_db_connection()
             try:
@@ -68,41 +69,53 @@ def render(perfil_atual):
                 st.dataframe(df_u, use_container_width=True, hide_index=True)
 
             st.divider()
-            st.subheader("Cadastrar / Modificar Permissões do Usuário")
+            st.subheader("Cadastrar / Modificar Permissoes do Usuario")
 
             with st.form("form_usuario_permissoes_personalizadas"):
                 col_u1, col_u2, col_u3 = st.columns(3)
-                u_nome_in = col_u1.text_input("Nome de Usuário *")
+                u_nome_in = col_u1.text_input("Nome de Usuario *")
                 u_senha_in = col_u2.text_input("Senha *", type="password")
-                u_perfil_in = col_u3.selectbox("Perfil Base", ["Fiscal", "Almoxarife", "Consulta", "Comprador", "Gestor", "Gestão Geral"])
+                
+                # Perfis corporativos alinhados ao planejamento
+                perfis_sistema = [
+                    "Administrador",
+                    "Comprador",
+                    "Fiscal",
+                    "Gestor Nivel 1",
+                    "Gestor Nivel 2",
+                    "Almoxarife",
+                    "Visitante",
+                    "Gestao Geral"
+                ]
+                u_perfil_in = col_u3.selectbox("Nivel de Acesso Base", perfis_sistema)
 
                 st.markdown("---")
-                st.markdown("### Marque o que este usuário PODE acessar:")
+                st.markdown("### Marque o que este usuario PODE acessar:")
 
                 col_p1, col_p2, col_p3 = st.columns(3)
 
                 with col_p1:
-                    st.markdown("**Módulo de Saving & Projetos**")
+                    st.markdown("**Modulo de Saving & Projetos**")
                     p_ver_saving = st.checkbox("Visualizar Saving & Projetos", value=True)
-                    p_imp_saving = st.checkbox("Importar Planilhas de Cotação")
+                    p_imp_saving = st.checkbox("Importar Planilhas de Cotacao")
                     p_budgets = st.checkbox("Gerenciar / Alterar Budgets")
 
                 with col_p2:
-                    st.markdown("**Operações de Estoque Físico**")
+                    st.markdown("**Operacoes de Estoque Fisico**")
                     p_cons_est = st.checkbox("Consultar Saldos do Estoque", value=True)
                     p_ent_est = st.checkbox("Dar Entradas (XML / Manual)")
-                    p_baixa_est = st.checkbox("Dar Baixas (Kit / Produção)")
-                    p_end_est = st.checkbox("Endereçar / Classificar Materiais")
+                    p_baixa_est = st.checkbox("Dar Baixas (Kit / Producao)")
+                    p_end_est = st.checkbox("Enderecar / Classificar Materiais")
                     p_transf_est = st.checkbox("Transferir Saldo entre Projetos")
 
                 with col_p3:
-                    st.markdown("**Auditoria e Administração**")
+                    st.markdown("**Auditoria e Administracao**")
                     p_estorno_ent = st.checkbox("Estornar Entradas")
-                    p_estorno_sai = st.checkbox("Estornar Saídas")
-                    p_relatorios = st.checkbox("Visualizar Relatórios de Consumo", value=True)
+                    p_estorno_sai = st.checkbox("Estornar Saidas")
+                    p_relatorios = st.checkbox("Visualizar Relatorios de Consumo", value=True)
                     p_admin = st.checkbox("Administrador Geral (Acesso Total)")
 
-                if st.form_submit_button("Salvar Usuário e Permissões", type="primary"):
+                if st.form_submit_button("Salvar Usuario e Permissoes", type="primary"):
                     if u_nome_in and u_senha_in:
                         conn = db.get_db_connection()
                         cursor = conn.cursor()
@@ -154,37 +167,37 @@ def render(perfil_atual):
                                 p_relatorios, p_admin
                             ))
                             conn.commit()
-                            st.success(f"Permissões do usuário '{u_nome_in}' salvas com sucesso!")
+                            st.success(f"Permissoes do usuario '{u_nome_in}' salvas com sucesso!")
                             st.rerun()
                         except Exception as e:
                             conn.rollback()
-                            st.error(f"Erro ao salvar permissões: {e}")
+                            st.error(f"Erro ao salvar permissoes: {e}")
                         cursor.close()
                         conn.close()
                     else:
-                        st.warning("Preencha o nome de usuário e a senha.")
+                        st.warning("Preencha o nome de usuario e a senha.")
 
             st.divider()
-            st.subheader("Remover Usuários")
+            st.subheader("Remover Usuarios")
             if not df_u.empty and "username" in df_u.columns:
                 users_del = [
                     u for u in df_u["username"].tolist() if u.lower() != st.session_state["usuario_logado"].lower()
                 ]
                 if users_del:
-                    u_sel = st.selectbox("Selecione o usuário para excluir:", users_del)
-                    if st.button("Apagar Usuário", type="primary"):
+                    u_sel = st.selectbox("Selecione o usuario para excluir:", users_del)
+                    if st.button("Apagar Usuario", type="primary"):
                         conn = db.get_db_connection()
                         cursor = conn.cursor()
                         cursor.execute("DELETE FROM usuarios WHERE LOWER(username) = LOWER(%s);", (u_sel,))
                         conn.commit()
                         cursor.close()
                         conn.close()
-                        st.success(f"Usuário '{u_sel}' removido.")
+                        st.success(f"Usuario '{u_sel}' removido.")
                         st.rerun()
 
     if tab_cc_gest and is_admin_config:
         with tab_cc_gest:
-            st.subheader("Gestão de Centros de Custo")
+            st.subheader("Gestao de Centros de Custo")
 
             conn = db.get_db_connection()
             try:
@@ -200,7 +213,7 @@ def render(perfil_atual):
 
             with col_cc_add:
                 st.write("**Cadastrar Novo Centro de Custo:**")
-                novo_cc_nome = st.text_input("Nome do Centro de Custo (Ex: Produção - Galpão 2)")
+                novo_cc_nome = st.text_input("Nome do Centro de Custo (Ex: Producao - Galpao 2)")
                 if st.button("Cadastrar Centro de Custo"):
                     if novo_cc_nome:
                         cursor = conn.cursor()
@@ -211,7 +224,7 @@ def render(perfil_atual):
                             st.rerun()
                         except Exception as e:
                             conn.rollback()
-                            st.error("Erro ao cadastrar ou nome já existente.")
+                            st.error("Erro ao cadastrar ou nome ja existente.")
                         cursor.close()
 
             with col_cc_del:
@@ -230,7 +243,7 @@ def render(perfil_atual):
 
     if tab_hist_access and is_admin_config:
         with tab_hist_access:
-            st.subheader("Histórico de Acessos ao Sistema")
+            st.subheader("Historico de Acessos ao Sistema")
 
             conn = db.get_db_connection()
             try:
@@ -248,11 +261,11 @@ def render(perfil_atual):
                 st.info("Nenhum registro de acesso gravado.")
             else:
                 col_acc1, col_acc2 = st.columns([3, 1])
-                usrs_filtro = ["Todos os Usuários"] + sorted(list(df_acc["usuario"].dropna().unique()))
-                usr_acc_sel = col_acc1.selectbox("Filtrar por Usuário:", usrs_filtro)
+                usrs_filtro = ["Todos os Usuarios"] + sorted(list(df_acc["usuario"].dropna().unique()))
+                usr_acc_sel = col_acc1.selectbox("Filtrar por Usuario:", usrs_filtro)
 
                 df_acc_vis = df_acc.copy()
-                if usr_acc_sel != "Todos os Usuários":
+                if usr_acc_sel != "Todos os Usuarios":
                     df_acc_vis = df_acc_vis[df_acc_vis["usuario"] == usr_acc_sel]
 
                 st.dataframe(df_acc_vis[["data_hora", "usuario", "perfil"]], use_container_width=True, hide_index=True)
