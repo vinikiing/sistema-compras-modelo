@@ -197,49 +197,60 @@ def tela_login():
 
 
 # ---------------------------------------------------------
-# EXECUTOR COM CAPTURA REAL DE ERROS (DIAGNÓSTICO)
+# EXECUTOR INTELIGENTE (IGNORA FUNÇÕES DE BANCO/UTILITÁRIAS)
 # ---------------------------------------------------------
 def executar_modulo(modulo, perfil):
     if not modulo:
         st.error("Módulo não encontrado.")
         return
 
-    encontrou = False
+    # 1. Procura primeiro pelos nomes oficiais padrão de renderização
     for nome_func in ['render', 'main', 'run', 'app', 'exibir', 'tela_compras']:
         if hasattr(modulo, nome_func):
-            encontrou = True
             func = getattr(modulo, nome_func)
-            try:
-                # Tenta chamar passando o perfil
-                func(perfil)
-                return
-            except TypeError:
+            if callable(func):
                 try:
-                    # Se não aceitar argumentos, chama vazio
-                    func()
+                    func(perfil)
                     return
+                except TypeError:
+                    try:
+                        func()
+                        return
+                    except Exception as e:
+                        st.error(f"Erro na função '{nome_func}':")
+                        st.exception(e)
+                        return
                 except Exception as e:
-                    st.error(f"Erro ao executar a função '{nome_func}' sem argumentos:")
+                    st.error(f"Erro na função '{nome_func}':")
                     st.exception(e)
                     return
-            except Exception as e:
-                st.error(f"Erro ao executar a função '{nome_func}' com o perfil '{perfil}':")
-                st.exception(e)
-                return
 
-    if not encontrou:
-        # Tenta pegar a primeira função disponível
-        funcs = [o for o in inspect.getmembers(modulo, inspect.isfunction) if not o[0].startswith('_')]
-        if funcs:
+    # 2. Fallback: procura funções públicas ignorando utilitários e banco de dados
+    funcoes_excluidas = ['get_db_connection', 'init_db', 'conectar', 'query', 'db_connect', 'carregar_dados']
+    funcs = [
+        o for o in inspect.getmembers(modulo, inspect.isfunction) 
+        if not o[0].startswith('_') and o[0] not in funcoes_excluidas
+    ]
+
+    if funcs:
+        func = funcs[0][1]
+        try:
+            func(perfil)
+            return
+        except TypeError:
             try:
-                funcs[0][1](perfil)
+                func()
                 return
             except Exception as e:
-                st.error(f"Erro na função padrão '{funcs[0][0]}':")
+                st.error(f"Erro na função '{funcs[0][0]}':")
                 st.exception(e)
                 return
+        except Exception as e:
+            st.error(f"Erro na função '{funcs[0][0]}':")
+            st.exception(e)
+            return
 
-    st.error("O arquivo foi carregado, mas nenhuma função executável foi identificada.")
+    st.error("O arquivo foi carregado, mas nenhuma função de renderização válida foi identificada.")
 
 
 # ---------------------------------------------------------
