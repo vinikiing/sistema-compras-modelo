@@ -15,18 +15,12 @@ if ROOT_DIR not in sys.path:
 
 import database as db
 
-# Importação segura de módulos
-try:
-    from modulos import compras, saving_projetos, estoque, almoxarife, configuracoes
-except ImportError:
-    try:
-        import compras
-        import saving_projetos
-        import estoque
-        import almoxarife
-        import configuracoes
-    except ImportError:
-        compras = saving_projetos = estoque = almoxarife = configuracoes = None
+# Importação direta dos módulos da raiz do projeto
+import compras
+import saving_projetos
+import estoque
+import almoxarife
+import configuracoes
 
 # Inicializa banco de dados e estrutura de tabelas
 try:
@@ -43,8 +37,6 @@ if "perfil" not in st.session_state:
     st.session_state["perfil"] = "Consulta"
 if "permissoes" not in st.session_state:
     st.session_state["permissoes"] = {}
-if "pagina_ativa" not in st.session_state:
-    st.session_state["pagina_ativa"] = "Módulo de Compras"
 
 
 # ---------------------------------------------------------
@@ -196,11 +188,10 @@ def tela_login():
 
 
 # ---------------------------------------------------------
-# PAINEL PRINCIPAL & NAVEGAÇÃO EXPANSÍVEL BLINDADA
+# PAINEL PRINCIPAL & NAVEGAÇÃO LATERAL
 # ---------------------------------------------------------
 def painel_principal():
     perfil_atual = st.session_state["perfil"]
-    ativa = st.session_state["pagina_ativa"]
 
     with st.sidebar:
         col_img, col_txt = st.columns([1, 3])
@@ -212,34 +203,18 @@ def painel_principal():
         st.caption("Suprimentos & Estoque")
         st.divider()
 
-        # Mantém a seção aberta se a página ativa estiver dentro dela
-        is_saving_ativa = ativa == "Saving & Projetos"
-        is_materiais_ativa = ativa in ["Módulo de Compras", "Controle de Estoque", "Endereçamento (Almoxarifado)"]
-        is_config_ativa = ativa == "Configurações"
+        st.markdown("### Navegação do Sistema")
 
+        opcoes_menu = ["🛒 Módulo de Compras", "📦 Controle de Estoque", "📍 Endereçamento (Almoxarifado)"]
+        
         if perfil_atual == "Gestão Geral":
-            with st.expander("📊 Projetos & Gestão", expanded=is_saving_ativa):
-                if st.button("📊 Saving & Projetos", use_container_width=True):
-                    st.session_state["pagina_ativa"] = "Saving & Projetos"
-                    st.rerun()
+            opcoes_menu.insert(0, "📊 Saving & Projetos")
 
-        with st.expander("📦 Materiais & Estoque", expanded=is_materiais_ativa):
-            if st.button("🛒 Módulo de Compras", use_container_width=True):
-                st.session_state["pagina_ativa"] = "Módulo de Compras"
-                st.rerun()
-            if st.button("📦 Controle de Estoque", use_container_width=True):
-                st.session_state["pagina_ativa"] = "Controle de Estoque"
-                st.rerun()
-            if st.button("📍 Endereçamento", use_container_width=True):
-                st.session_state["pagina_ativa"] = "Endereçamento (Almoxarifado)"
-                st.rerun()
+        opcoes_menu.append("⚙️ Configurações")
 
-        with st.expander("⚙️ Sistema", expanded=is_config_ativa):
-            if st.button("⚙️ Configurações", use_container_width=True):
-                st.session_state["pagina_ativa"] = "Configurações"
-                st.rerun()
+        modulo_sel = st.radio("Selecione o Módulo:", opcoes_menu, label_visibility="collapsed")
 
-        st.markdown("<br>" * 4, unsafe_allow_html=True)
+        st.markdown("<br>" * 8, unsafe_allow_html=True)
         st.divider()
 
         col_avatar, col_info = st.columns([1, 3])
@@ -258,27 +233,20 @@ def painel_principal():
             st.query_params.clear()
             st.rerun()
 
-    # Roteamento seguro baseado estritamente no session_state
-    pagina_atual = st.session_state["pagina_ativa"]
-
-    if pagina_atual == "Módulo de Compras" and compras:
+    # Roteamento dos Módulos
+    if modulo_sel == "🛒 Módulo de Compras":
         compras.render(perfil_atual)
-    elif pagina_atual == "Saving & Projetos" and saving_projetos:
+    elif modulo_sel == "📊 Saving & Projetos":
         if perfil_atual == "Gestão Geral":
             saving_projetos.render(perfil_atual)
         else:
             st.error("Acesso não autorizado.")
-    elif pagina_atual == "Controle de Estoque" and estoque:
+    elif modulo_sel == "📦 Controle de Estoque":
         estoque.render(perfil_atual)
-    elif pagina_atual == "Endereçamento (Almoxarifado)" and almoxarife:
+    elif modulo_sel == "📍 Endereçamento (Almoxarifado)":
         almoxarife.render_enderecamento()
-    elif pagina_atual == "Configurações" and configuracoes:
+    elif modulo_sel == "⚙️ Configurações":
         configuracoes.render(perfil_atual)
-    else:
-        if compras:
-            compras.render(perfil_atual)
-        else:
-            st.info("Selecione um módulo na barra lateral.")
 
 
 # ---------------------------------------------------------
