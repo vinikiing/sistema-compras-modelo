@@ -197,7 +197,7 @@ def tela_login():
 
 
 # ---------------------------------------------------------
-# EXECUTOR INTELIGENTE (IGNORA FUNÇÕES DE BANCO/UTILITÁRIAS)
+# EXECUTOR BLINDADO (EXCLUI IMPORTS E FUNÇÕES DE BANCO)
 # ---------------------------------------------------------
 def executar_modulo(modulo, perfil):
     if not modulo:
@@ -225,11 +225,13 @@ def executar_modulo(modulo, perfil):
                     st.exception(e)
                     return
 
-    # 2. Fallback: procura funções públicas ignorando utilitários e banco de dados
+    # 2. Fallback seguro: pega apenas funções definidas DIRETAMENTE no arquivo do módulo
     funcoes_excluidas = ['get_db_connection', 'init_db', 'conectar', 'query', 'db_connect', 'carregar_dados']
     funcs = [
         o for o in inspect.getmembers(modulo, inspect.isfunction) 
-        if not o[0].startswith('_') and o[0] not in funcoes_excluidas
+        if not o[0].startswith('_') 
+        and o[0] not in funcoes_excluidas 
+        and o[1].__module__ == modulo.__name__
     ]
 
     if funcs:
