@@ -15,12 +15,20 @@ if ROOT_DIR not in sys.path:
 
 import database as db
 
-# Importação direta dos módulos da raiz do projeto
-import modulo_compras
-import saving_projetos
-import estoque
-import almoxarife
-import configuracoes
+# Importações blindadas contra qualquer variação de nome de arquivo
+def safe_import(module_names):
+    for name in module_names:
+        try:
+            return __import__(name, fromlist=['*'])
+        except ImportError:
+            continue
+    return None
+
+compras = safe_import(['compras', 'modulo_compras', 'modulos.compras', 'modulos.modulo_compras'])
+saving_projetos = safe_import(['saving_projetos', 'modulos.saving_projetos'])
+estoque = safe_import(['estoque', 'modulos.estoque'])
+almoxarife = safe_import(['almoxarife', 'modulos.almoxarife'])
+configuracoes = safe_import(['configuracoes', 'modulos.configuracoes'])
 
 # Inicializa banco de dados e estrutura de tabelas
 try:
@@ -188,7 +196,7 @@ def tela_login():
 
 
 # ---------------------------------------------------------
-# PAINEL PRINCIPAL & NAVEGAÇÃO LATERAL
+# PAINEL PRINCIPAL & NAVEGAÇÃO
 # ---------------------------------------------------------
 def painel_principal():
     perfil_atual = st.session_state["perfil"]
@@ -233,20 +241,35 @@ def painel_principal():
             st.query_params.clear()
             st.rerun()
 
-    # Roteamento dos Módulos
+    # Roteamento seguro dos Módulos
     if modulo_sel == "🛒 Módulo de Compras":
-        compras.render(perfil_atual)
+        if compras and hasattr(compras, 'render'):
+            compras.render(perfil_atual)
+        else:
+            st.error("O módulo de compras não foi carregado corretamente.")
     elif modulo_sel == "📊 Saving & Projetos":
         if perfil_atual == "Gestão Geral":
-            saving_projetos.render(perfil_atual)
+            if saving_projetos and hasattr(saving_projetos, 'render'):
+                saving_projetos.render(perfil_atual)
+            else:
+                st.error("O módulo de saving não foi encontrado.")
         else:
             st.error("Acesso não autorizado.")
     elif modulo_sel == "📦 Controle de Estoque":
-        estoque.render(perfil_atual)
+        if estoque and hasattr(estoque, 'render'):
+            estoque.render(perfil_atual)
+        else:
+            st.error("O módulo de estoque não foi encontrado.")
     elif modulo_sel == "📍 Endereçamento (Almoxarifado)":
-        almoxarife.render_enderecamento()
+        if almoxarife and hasattr(almoxarife, 'render_enderecamento'):
+            almoxarife.render_enderecamento()
+        else:
+            st.error("O módulo de almoxarifado não foi encontrado.")
     elif modulo_sel == "⚙️ Configurações":
-        configuracoes.render(perfil_atual)
+        if configuracoes and hasattr(configuracoes, 'render'):
+            configuracoes.render(perfil_atual)
+        else:
+            st.error("O módulo de configurações não foi encontrado.")
 
 
 # ---------------------------------------------------------
