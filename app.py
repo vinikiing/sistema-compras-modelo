@@ -15,7 +15,7 @@ if ROOT_DIR not in sys.path:
 
 import database as db
 
-# Importações corretas baseadas na sua pasta 'modulos'
+# Importações seguras dos módulos reais da pasta 'modulos'
 try:
     from modulos import compras_modulo as compras
     from modulos import saving_projetos
@@ -241,12 +241,21 @@ def painel_principal():
             st.query_params.clear()
             st.rerun()
 
-    # Roteamento seguro dos Módulos
+    # Roteamento ultra flexível para os Módulos
     if modulo_sel == "🛒 Módulo de Compras":
-        if compras and hasattr(compras, 'render'):
-            compras.render(perfil_atual)
+        if compras:
+            if hasattr(compras, 'render'):
+                try:
+                    compras.render(perfil_atual)
+                except TypeError:
+                    compras.render()
+            elif hasattr(compras, 'main'):
+                compras.main()
+            else:
+                st.error("O arquivo 'compras_modulo.py' foi carregado, mas nenhuma função de renderização foi encontrada.")
         else:
-            st.error("O módulo de compras não foi carregado corretamente.")
+            st.error("O módulo de compras não foi encontrado na pasta 'modulos'.")
+
     elif modulo_sel == "📊 Saving & Projetos":
         if perfil_atual == "Gestão Geral":
             if saving_projetos and hasattr(saving_projetos, 'render'):
@@ -255,11 +264,13 @@ def painel_principal():
                 st.error("O módulo de saving não foi encontrado.")
         else:
             st.error("Acesso não autorizado.")
+
     elif modulo_sel == "📦 Controle de Estoque":
         if estoque and hasattr(estoque, 'render'):
             estoque.render(perfil_atual)
         else:
             st.error("O módulo de estoque não foi encontrado.")
+
     elif modulo_sel == "📍 Endereçamento (Almoxarifado)":
         if estoque:
             if hasattr(estoque, 'render_enderecamento'):
@@ -267,9 +278,10 @@ def painel_principal():
             elif hasattr(estoque, 'render'):
                 estoque.render(perfil_atual)
             else:
-                st.error("Função de endereçamento não encontrada no módulo de estoque.")
+                st.error("Função de endereçamento não encontrada no estoque.")
         else:
             st.error("O módulo de estoque não foi encontrado.")
+
     elif modulo_sel == "⚙️ Configurações":
         if configuracoes and hasattr(configuracoes, 'render'):
             configuracoes.render(perfil_atual)
