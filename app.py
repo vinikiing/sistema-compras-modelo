@@ -15,7 +15,7 @@ if ROOT_DIR not in sys.path:
 
 import database as db
 
-# Importação segura de módulos (incluindo compras)
+# Importação segura de módulos
 try:
     from modulos import compras, saving_projetos, estoque, almoxarife, configuracoes
 except ImportError:
@@ -43,10 +43,12 @@ if "perfil" not in st.session_state:
     st.session_state["perfil"] = "Consulta"
 if "permissoes" not in st.session_state:
     st.session_state["permissoes"] = {}
+if "pagina_ativa" not in st.session_state:
+    st.session_state["pagina_ativa"] = "Módulo de Compras"
 
 
 # ---------------------------------------------------------
-# AUTO-RECOVERY DA SESSÃO VIA URL
+# AUTO-RECOVERY DA SESSÃO VIA URL (EVITA LOGOUT NO RAILWAY)
 # ---------------------------------------------------------
 def tentar_restaurar_sessao_url():
     if not st.session_state["logged_in"]:
@@ -194,10 +196,11 @@ def tela_login():
 
 
 # ---------------------------------------------------------
-# PAINEL PRINCIPAL & NAVEGAÇÃO EXPANSÍVEL
+# PAINEL PRINCIPAL & NAVEGAÇÃO EXPANSÍVEL BLINDADA
 # ---------------------------------------------------------
 def painel_principal():
     perfil_atual = st.session_state["perfil"]
+    ativa = st.session_state["pagina_ativa"]
 
     with st.sidebar:
         col_img, col_txt = st.columns([1, 3])
@@ -209,40 +212,34 @@ def painel_principal():
         st.caption("Suprimentos & Estoque")
         st.divider()
 
-        modulo_escolhido = None
+        # Mantém a seção aberta se a página ativa estiver dentro dela
+        is_saving_ativa = ativa == "Saving & Projetos"
+        is_materiais_ativa = ativa in ["Módulo de Compras", "Controle de Estoque", "Endereçamento (Almoxarifado)"]
+        is_config_ativa = ativa == "Configurações"
 
         if perfil_atual == "Gestão Geral":
-            with st.expander("📊 Projetos & Gestão", expanded=False):
-                mod_proj = st.radio(
-                    "Projetos",
-                    ["Saving & Projetos"],
-                    key="nav_saving",
-                    label_visibility="collapsed"
-                )
-                if mod_proj:
-                    modulo_escolhido = mod_proj
+            with st.expander("📊 Projetos & Gestão", expanded=is_saving_ativa):
+                if st.button("📊 Saving & Projetos", use_container_width=True):
+                    st.session_state["pagina_ativa"] = "Saving & Projetos"
+                    st.rerun()
 
-        with st.expander("📦 Materiais & Estoque", expanded=True):
-            mod_mat = st.radio(
-                "Materiais",
-                ["Módulo de Compras", "Controle de Estoque", "Endereçamento (Almoxarifado)"],
-                key="nav_materiais",
-                label_visibility="collapsed"
-            )
-            if mod_mat:
-                modulo_escolhido = mod_mat
+        with st.expander("📦 Materiais & Estoque", expanded=is_materiais_ativa):
+            if st.button("🛒 Módulo de Compras", use_container_width=True):
+                st.session_state["pagina_ativa"] = "Módulo de Compras"
+                st.rerun()
+            if st.button("📦 Controle de Estoque", use_container_width=True):
+                st.session_state["pagina_ativa"] = "Controle de Estoque"
+                st.rerun()
+            if st.button("📍 Endereçamento", use_container_width=True):
+                st.session_state["pagina_ativa"] = "Endereçamento (Almoxarifado)"
+                st.rerun()
 
-        with st.expander("⚙️ Sistema", expanded=False):
-            mod_sis = st.radio(
-                "Sistema",
-                ["Configurações"],
-                key="nav_config",
-                label_visibility="collapsed"
-            )
-            if mod_sis:
-                modulo_escolhido = mod_sis
+        with st.expander("⚙️ Sistema", expanded=is_config_ativa):
+            if st.button("⚙️ Configurações", use_container_width=True):
+                st.session_state["pagina_ativa"] = "Configurações"
+                st.rerun()
 
-        st.markdown("<br>" * 6, unsafe_allow_html=True)
+        st.markdown("<br>" * 4, unsafe_allow_html=True)
         st.divider()
 
         col_avatar, col_info = st.columns([1, 3])
@@ -261,25 +258,25 @@ def painel_principal():
             st.query_params.clear()
             st.rerun()
 
-    # Roteamento seguro dos módulos incluindo o Módulo de Compras
-    if modulo_escolhido == "Módulo de Compras" and compras:
+    # Roteamento seguro baseado estritamente no session_state
+    pagina_atual = st.session_state["pagina_ativa"]
+
+    if pagina_atual == "Módulo de Compras" and compras:
         compras.render(perfil_atual)
-    elif modulo_escolhido == "Saving & Projetos" and saving_projetos:
+    elif pagina_atual == "Saving & Projetos" and saving_projetos:
         if perfil_atual == "Gestão Geral":
             saving_projetos.render(perfil_atual)
         else:
             st.error("Acesso não autorizado.")
-    elif modulo_escolhido == "Controle de Estoque" and estoque:
+    elif pagina_atual == "Controle de Estoque" and estoque:
         estoque.render(perfil_atual)
-    elif modulo_escolhido == "Endereçamento (Almoxarifado)" and almoxarife:
+    elif pagina_atual == "Endereçamento (Almoxarifado)" and almoxarife:
         almoxarife.render_enderecamento()
-    elif modulo_escolhido == "Configurações" and configuracoes:
+    elif pagina_atual == "Configurações" and configuracoes:
         configuracoes.render(perfil_atual)
     else:
         if compras:
             compras.render(perfil_atual)
-        elif estoque:
-            estoque.render(perfil_atual)
         else:
             st.info("Selecione um módulo na barra lateral.")
 
