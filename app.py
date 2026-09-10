@@ -4,7 +4,7 @@ import streamlit as st
 import inspect
 
 st.set_page_config(
-    page_title="Portal - Suprimentos & Estoque",
+    page_title="Portal Delta - Suprimentos & Estoque",
     page_icon="logo_delta.png",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -197,41 +197,49 @@ def tela_login():
 
 
 # ---------------------------------------------------------
-# EXECUTOR DINÂMICO DE MÓDULOS (BLINDAGEM TOTAL)
+# EXECUTOR COM CAPTURA REAL DE ERROS (DIAGNÓSTICO)
 # ---------------------------------------------------------
 def executar_modulo(modulo, perfil):
     if not modulo:
         st.error("Módulo não encontrado.")
         return
 
-    # Procura por nomes comuns de função de entrada
+    encontrou = False
     for nome_func in ['render', 'main', 'run', 'app', 'exibir', 'tela_compras']:
         if hasattr(modulo, nome_func):
+            encontrou = True
             func = getattr(modulo, nome_func)
             try:
+                # Tenta chamar passando o perfil
                 func(perfil)
                 return
             except TypeError:
                 try:
+                    # Se não aceitar argumentos, chama vazio
                     func()
                     return
-                except Exception:
-                    pass
-
-    # Fallback: pega a primeira função pública disponível no arquivo
-    funcs = [o for o in inspect.getmembers(modulo, inspect.isfunction) if not o[0].startswith('_')]
-    if funcs:
-        try:
-            funcs[0][1](perfil)
-            return
-        except TypeError:
-            try:
-                funcs[0][1]()
+                except Exception as e:
+                    st.error(f"Erro ao executar a função '{nome_func}' sem argumentos:")
+                    st.exception(e)
+                    return
+            except Exception as e:
+                st.error(f"Erro ao executar a função '{nome_func}' com o perfil '{perfil}':")
+                st.exception(e)
                 return
-            except Exception:
-                pass
 
-    st.error("O arquivo foi carregado, mas nenhuma função de execução válida foi identificada.")
+    if not encontrou:
+        # Tenta pegar a primeira função disponível
+        funcs = [o for o in inspect.getmembers(modulo, inspect.isfunction) if not o[0].startswith('_')]
+        if funcs:
+            try:
+                funcs[0][1](perfil)
+                return
+            except Exception as e:
+                st.error(f"Erro na função padrão '{funcs[0][0]}':")
+                st.exception(e)
+                return
+
+    st.error("O arquivo foi carregado, mas nenhuma função executável foi identificada.")
 
 
 # ---------------------------------------------------------
@@ -280,7 +288,7 @@ def painel_principal():
             st.query_params.clear()
             st.rerun()
 
-    # Roteamento dinâmico blindado
+    # Roteamento dinâmico
     if modulo_sel == "🛒 Módulo de Compras":
         executar_modulo(compras, perfil_atual)
     elif modulo_sel == "📊 Saving & Projetos":
