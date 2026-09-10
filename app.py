@@ -15,7 +15,8 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 import database as db
-from modulos import saving_projetos, estoque, almoxarife, configuracoes, compras_modulo
+# Removido 'almoxarife' e garantindo que 'estoque' aponte para o nosso unificado
+from modulos import saving_projetos, estoque, configuracoes, compras_modulo
 
 # Inicializa banco de dados e estrutura de tabelas
 try:
@@ -205,8 +206,7 @@ def painel_principal():
         
     opcoes_menu.extend([
         "🛒 Módulo de Compras",
-        "📦 Controle de Estoque",
-        "📍 Endereçamento (Almoxarifado)",
+        "📦 Controle de Estoque & Almoxarifado",
         "⚙️ Configurações"
     ])
 
@@ -229,10 +229,8 @@ def painel_principal():
             st.error("Acesso não autorizado.")
     elif modulo_sel == "🛒 Módulo de Compras":
         compras_modulo.render_modulo_compras()
-    elif modulo_sel == "📦 Controle de Estoque":
+    elif modulo_sel == "📦 Controle de Estoque & Almoxarifado":
         estoque.render(perfil_atual)
-    elif modulo_sel == "📍 Endereçamento (Almoxarifado)":
-        almoxarife.render_enderecamento()
     elif modulo_sel == "⚙️ Configurações":
         configuracoes.render(perfil_atual)
 
