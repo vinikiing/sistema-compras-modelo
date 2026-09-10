@@ -1,21 +1,31 @@
-import streamlit as st
-import pandas as pd
+import os
+import sys
 import database as db
+import pandas as pd
+import streamlit as st
 import xml.etree.ElementTree as ET
 import io
 
 def render(perfil_atual):
-    st.markdown("## 📦 Controle de Estoque")
+    st.markdown("## 📦 Controle de Estoque & Almoxarifado")
     
+    # Identifica permissões e perfil do usuário
+    perm = st.session_state.get("permissoes", {})
+    is_admin = perm.get("e_admin", False) or perfil_atual in ["Administrador", "Gestão Geral", "Gestor"]
+    pode_guardar = (
+        perfil_atual in ["Almoxarife", "Gestão Geral", "Gestor", "Administrador"]
+        or is_admin
+        or perm.get("pode_enderecar_estoque", False)
+    )
+
     # Cálculo das Métricas (Valor Total, Total de SKUs e SKUs Zerados)
     try:
         conn = db.get_db_connection()
-        df_metricas = pd.read_sql("SELECT quantidade, preco_unitario FROM estoque;", conn)
+        df_metricas = pd.read_sql("SELECT quantidade, preco_unitario FROM estoque WHERE localizacao NOT LIKE '%A Chegar%' AND localizacao NOT LIKE '%A Endereçar%';", conn)
         conn.close()
         
         if not df_metricas.empty:
             total_skus = len(df_metricas)
-            # Conta quantos SKUs estão com quantidade igual ou menor que zero
             skus_zerados = len(df_metricas[df_metricas['quantidade'] <= 0]) if 'quantidade' in df_metricas.columns else 0
             
             if 'quantidade' in df_metricas.columns and 'preco_unitario' in df_metricas.columns:
@@ -44,19 +54,19 @@ def render(perfil_atual):
         }
         .metric-title {
             color: #8b949e;
-            font-size: 29px;
+            font-size: 16px;
             font-weight: 600;
             margin-bottom: 8px;
             text-transform: uppercase;
         }
         .metric-value {
             color: #58a6ff;
-            font-size: 29px;
+            font-size: 26px;
             font-weight: 700;
         }
         .metric-value-alert {
             color: #f85149;
-            font-size: 29px;
+            font-size: 26px;
             font-weight: 700;
         }
         </style>
@@ -73,12 +83,11 @@ def render(perfil_atual):
     with col_m2:
         st.markdown(f"""
             <div class='metric-card'>
-                <div class='metric-title'>Total de SKUs</div>
+                <div class='metric-title'>Total de SKUs Ativos</div>
                 <div class='metric-value'>{total_skus}</div>
             </div>
         """, unsafe_allow_html=True)
     with col_m3:
-        # Card de SKUs Zerados ganha cor de alerta se houver rupturas
         val_class = "metric-value-alert" if skus_zerados > 0 else "metric-value"
         st.markdown(f"""
             <div class='metric-card'>
@@ -89,24 +98,24 @@ def render(perfil_atual):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Abas do Módulo de Estoque
+    # Abas unificadas do Módulo
     abas = [
         "Consultar Estoque", 
+        "Endereçamento & Trânsito", 
         "Dar Baixa (Carrinho)", 
         "Lançamento Manual", 
         "Entrada por XML", 
         "Transferência de Saldo", 
-        "Estorno de Movimentações"
+        "Estorno & Histórico"
     ]
     
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(abas)
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(abas)
 
     # ---------------------------------------------------------
     # TAB 1: CONSULTAR ESTOQUE
     # ---------------------------------------------------------
     with tab1:
-        st.subheader("Estoque Atual de Materiais")
-        
+        st.subheader("Estoque Atual de Materiais e Saldos")
         pesquisa = st.text_input("🔍 Pesquisar material por código, descrição ou localização...", placeholder="Digite para filtrar...")
 
         try:
@@ -118,7 +127,7 @@ def render(perfil_atual):
                 if pesquisa:
                     termo = pesquisa.lower()
                     mask = False
-                    for col in ['codigo', 'item', 'descricao', 'localizacao']:
+                    for col in ['codigo', 'item', 'descricao', 'localizacao', 'ultimo_fornecedor']:
                         if col in df_estoque.columns:
                             mask = mask | df_estoque[col].astype(str).str.lower().str.contains(termo, na=False)
                     df_estoque = df_estoque[mask]
@@ -130,23 +139,172 @@ def render(perfil_atual):
             st.error(f"Erro ao carregar estoque: {e}")
 
     # ---------------------------------------------------------
-    # TAB 2: DAR BAIXA (CARRINHO)
+    # TAB 2: ENDEREÇAMENTO E TRÂNSITO (ALMOXARIFADO)
     # ---------------------------------------------------------
     with tab2:
+        st.subheader("📍 Gestão Logística e Endereçamento Físico")
+        
+        conn_almo = db.get_db_connection()
+        aba_a1, aba_a2 = st.tabs([
+            "🚚 Materiais Que Vão Chegar (A Chegar)",
+            "📦 Materiais Recebidos / A Endereçar (Guardar em Lote)"
+        ])
+
+        # Sub-aba A1: Materiais vindos do Módulo de Compras (A Chegar)
+        with aba_a1:
+            st.subheader("Materiais Solicitados / A Caminho (Via Pedidos de Compra)")
+            try:
+                df_vai_chegar = pd.read_sql_query("""
+                    SELECT id, item, quantidade, unidade, localizacao, ultimo_fornecedor, preco_unitario 
+                    FROM estoque 
+                    WHERE localizacao LIKE '%A Chegar%' 
+                    ORDER BY id DESC;
+                """, conn_almo)
+            except Exception:
+                df_vai_chegar = pd.DataFrame()
+
+            if df_vai_chegar.empty:
+                st.info("Nenhum material pendente de chegada no momento.")
+            else:
+                st.dataframe(df_vai_chegar.rename(columns={
+                    "id": "ID", "item": "Material / Descrição", "quantidade": "Qtd",
+                    "unidade": "Un.", "localizacao": "Status / Origem", "ultimo_fornecedor": "Fornecedor", "preco_unitario": "Preço Unit."
+                }), use_container_width=True, hide_index=True)
+
+                if pode_guardar:
+                    st.divider()
+                    col_rec, col_canc = st.columns(2)
+
+                    with col_rec:
+                        st.markdown("### 📥 Confirmar Chegada na Fábrica")
+                        dict_chegar = {f"ID {r['id']} | {r['item']} ({r['quantidade']} {r['unidade']})": r for _, r in df_vai_chegar.iterrows()}
+
+                        with st.form("form_confirmar_recebimento_lote"):
+                            itens_rec_lote = st.multiselect("Selecione os materiais que chegaram *", options=list(dict_chegar.keys()))
+
+                            if st.form_submit_button("✅ Marcar Como Recebidos (Mover para 'A Endereçar')", type="primary"):
+                                if itens_rec_lote:
+                                    cursor = conn_almo.cursor()
+                                    count_recebidos = 0
+                                    for item_str in itens_rec_lote:
+                                        obj_rec = dict_chegar[item_str]
+                                        proj_origem = obj_rec["localizacao"].replace("(A Chegar)", "").replace("Projeto:", "").strip()
+                                        novo_st = f"Projeto: {proj_origem} (A Endereçar)"
+                                        cursor.execute("UPDATE estoque SET localizacao = %s WHERE id = %s;", (novo_st, obj_rec["id"]))
+                                        count_recebidos += 1
+                                    conn_almo.commit()
+                                    cursor.close()
+                                    st.success(f"🎉 {count_recebidos} material(is) movido(s) para 'A Endereçar'!")
+                                    st.rerun()
+                                else:
+                                    st.error("Selecione pelo menos um material.")
+
+                    with col_canc:
+                        st.markdown("### 🗑️ Cancelar / Apagar Itens")
+                        dict_canc = {f"ID {r['id']} | {r['item']} ({r['quantidade']} {r['unidade']})": r["id"] for _, r in df_vai_chegar.iterrows()}
+
+                        with st.form("form_cancelar_itens_a_chegar"):
+                            itens_canc_lote = st.multiselect("Selecione os materiais para cancelar/excluir *", options=list(dict_canc.keys()))
+
+                            if st.form_submit_button("🔴 Cancelar / Excluir Itens Selecionados", type="primary"):
+                                if itens_canc_lote:
+                                    cursor = conn_almo.cursor()
+                                    ids_apagar = [dict_canc[k] for k in itens_canc_lote]
+                                    cursor.execute("DELETE FROM estoque WHERE id IN %s;", (tuple(ids_apagar),))
+                                    conn_almo.commit()
+                                    cursor.close()
+                                    st.success(f"🗑️ {len(ids_apagar)} item(ns) apagado(s) com sucesso!")
+                                    st.rerun()
+                                else:
+                                    st.error("Selecione pelo menos um item para excluir.")
+
+        # Sub-aba A2: Materiais Recebidos / Aguardando Endereçamento Físico
+        with aba_a2:
+            st.subheader("Materiais Recebidos / Aguardando Endereçamento no Armário")
+            try:
+                df_enderecar = pd.read_sql_query("""
+                    SELECT id, item, quantidade, unidade, localizacao, ultimo_fornecedor 
+                    FROM estoque 
+                    WHERE localizacao LIKE '%A Endereçar%' 
+                    ORDER BY id DESC;
+                """, conn_almo)
+            except Exception:
+                df_enderecar = pd.DataFrame()
+
+            if df_enderecar.empty:
+                st.success("🎉 Nenhum material aguardando endereçamento no momento.")
+            else:
+                st.dataframe(df_enderecar.rename(columns={
+                    "id": "ID", "item": "Material / Descrição", "quantidade": "Qtd",
+                    "unidade": "Un.", "localizacao": "Status / Origem", "ultimo_fornecedor": "Fornecedor"
+                }), use_container_width=True, hide_index=True)
+
+                st.divider()
+                if pode_guardar:
+                    st.markdown("### 📍 Guardar Material no Endereço Físico (Em Lote)")
+
+                    try:
+                        df_locs_exist = pd.read_sql_query("""
+                            SELECT DISTINCT localizacao FROM estoque 
+                            WHERE localizacao NOT LIKE '%A Chegar%' AND localizacao NOT LIKE '%A Endereçar%' AND localizacao NOT LIKE 'Projeto:%'
+                            ORDER BY localizacao ASC;
+                        """, conn_almo)
+                        locs_fiscais_existentes = df_locs_exist["localizacao"].dropna().tolist() if not df_locs_exist.empty else []
+                    except Exception:
+                        locs_fiscais_existentes = []
+
+                    dict_end = {f"ID {r['id']} | {r['item']} ({r['quantidade']} {r['unidade']})": r for _, r in df_enderecar.iterrows()}
+
+                    itens_sel_lote = st.multiselect("Selecione os materiais para guardar juntos *", options=list(dict_end.keys()), key="multiselect_enderecar_lote")
+                    is_novo_local = st.checkbox("✍️ Cadastrar um NOVO Endereço Físico (Armário e Prateleira)", value=False if locs_fiscais_existentes else True, key="check_cadastrar_novo_local")
+
+                    local_final_sel = ""
+                    if not is_novo_local and locs_fiscais_existentes:
+                        local_final_sel = st.selectbox("Selecione um Endereço Existente *", locs_fiscais_existentes)
+                    else:
+                        col_arm, col_prat = st.columns(2)
+                        armario_input = col_arm.text_input("Armário / Corredor *", placeholder="Ex: ARMÁRIO A")
+                        prateleira_input = col_prat.text_input("Prateleira / Gaveta *", placeholder="Ex: PRATELEIRA 2")
+                        if armario_input and prateleira_input:
+                            local_final_sel = f"{armario_input.strip()} - {prateleira_input.strip()}"
+                        elif armario_input:
+                            local_final_sel = armario_input.strip()
+                        else:
+                            local_final_sel = prateleira_input.strip()
+
+                    st.write("")
+                    if st.button("📍 Confirmar Endereçamento do Lote", type="primary", use_container_width=True):
+                        if itens_sel_lote and local_final_sel.strip():
+                            cursor = conn_almo.cursor()
+                            count_guardados = 0
+                            for item_str in itens_sel_lote:
+                                obj_item = dict_end[item_str]
+                                cursor.execute("UPDATE estoque SET localizacao = %s WHERE id = %s;", (local_final_sel.strip(), obj_item["id"]))
+                                cursor.execute("""
+                                    INSERT INTO historico_estoque (tipo_movimentacao, item, quantidade, unidade, localizacao, projeto_motivo, retirado_por, usuario_sistema)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+                                """, ('ENDEREÇAMENTO', obj_item["item"], obj_item["quantidade"], obj_item["unidade"], local_final_sel.strip(), 'Armazenamento Físico', 'Almoxarife', st.session_state.get("user_token", "Sistema")))
+                                count_guardados += 1
+                            conn_almo.commit()
+                            cursor.close()
+                            st.success(f"🎉 {count_guardados} material(is) guardado(s) em '{local_final_sel.strip()}'!")
+                            st.rerun()
+                        else:
+                            st.error("Selecione ao menos um material e preencha o endereço físico.")
+        conn_almo.close()
+
+    # ---------------------------------------------------------
+    # TAB 3: DAR BAIXA (CARRINHO)
+    # ---------------------------------------------------------
+    with tab3:
         st.subheader("Saída de Materiais (Carrinho)")
         try:
             conn = db.get_db_connection()
-            df_cols = pd.read_sql("SELECT column_name FROM information_schema.columns WHERE table_name = 'estoque';", conn)
-            cols = df_cols['column_name'].tolist()
-            
-            col_desc = "item" if "item" in cols else ("descricao" if "descricao" in cols else "nome")
-            
-            query = f"SELECT id, codigo, {col_desc} as item, quantidade, unidade, localizacao FROM estoque WHERE quantidade > 0;"
-            df_estoque = pd.read_sql(query, conn)
+            df_estoque = pd.read_sql("SELECT id, codigo, item, quantidade, unidade, localizacao FROM estoque WHERE quantidade > 0 AND localizacao NOT LIKE '%A Chegar%' AND localizacao NOT LIKE '%A Endereçar%';", conn)
             conn.close()
 
             if df_estoque.empty:
-                st.warning("Não há itens com saldo em estoque para dar baixa.")
+                st.warning("Não há itens disponíveis em estoque físico para dar baixa.")
             else:
                 if "carrinho_baixa" not in st.session_state:
                     st.session_state["carrinho_baixa"] = []
@@ -156,30 +314,25 @@ def render(perfil_atual):
                     item_selecionado = st.selectbox(
                         "Selecione o Item para Adicionar ao Carrinho",
                         options=df_estoque.index,
-                        format_func=lambda x: f"{df_estoque.loc[x, 'codigo']} - {df_estoque.loc[x, 'item']} (Disp: {df_estoque.loc[x, 'quantidade']})"
+                        format_func=lambda x: f"{df_estoque.loc[x, 'codigo']} - {df_estoque.loc[x, 'item']} (Disp: {df_estoque.loc[x, 'quantidade']} | Loc: {df_estoque.loc[x, 'localizacao']})"
                     )
                 with col_b2:
-                    qtd_baixa = st.number_input("Quantidade", min_value=1.0, step=1.0, value=1.0)
+                    qtd_baixa = st.number_input("Quantidade", min_value=0.01, step=1.0, value=1.0)
 
                 if st.button("➕ Adicionar ao Carrinho"):
                     it = df_estoque.loc[item_selecionado]
                     if qtd_baixa > it['quantidade']:
-                        st.error("Quantidade solicitada maior do que o saldo disponível em estoque.")
+                        st.error("Quantidade solicitada maior do que o saldo disponível.")
                     else:
                         st.session_state["carrinho_baixa"].append({
-                            "id": int(it['id']),
-                            "codigo": it['codigo'],
-                            "item": it['item'],
-                            "quantidade": float(qtd_baixa),
-                            "unidade": it['unidade'],
-                            "localizacao": it['localizacao']
+                            "id": int(it['id']), "codigo": it['codigo'], "item": it['item'],
+                            "quantidade": float(qtd_baixa), "unidade": it['unidade'], "localizacao": it['localizacao']
                         })
                         st.success("Item adicionado ao carrinho!")
 
                 if st.session_state["carrinho_baixa"]:
                     st.markdown("### 🛒 Itens no Carrinho de Baixa")
-                    df_carrinho = pd.DataFrame(st.session_state["carrinho_baixa"])
-                    st.dataframe(df_carrinho, use_container_width=True)
+                    st.dataframe(pd.DataFrame(st.session_state["carrinho_baixa"]), use_container_width=True)
 
                     destino_baixa = st.text_input("Destino / Setor Requisitante da Baixa *", placeholder="Ex: Manutenção Elétrica")
 
@@ -196,37 +349,31 @@ def render(perfil_atual):
                                 try:
                                     conn = db.get_db_connection()
                                     cursor = conn.cursor()
-                                    usuario_atual = st.session_state.get("usuario_logado", "Sistema")
+                                    usuario_atual = st.session_state.get("user_token", "Sistema")
                                     
                                     for item in st.session_state["carrinho_baixa"]:
-                                        item_id = int(item["id"])
-                                        item_qtd = float(item["quantidade"])
-                                        
-                                        cursor.execute("UPDATE estoque SET quantidade = quantidade - %s WHERE id = %s;", (item_qtd, item_id))
-                                        
+                                        cursor.execute("UPDATE estoque SET quantidade = quantidade - %s WHERE id = %s;", (item["quantidade"], item["id"]))
                                         cursor.execute("""
                                             INSERT INTO historico_estoque (tipo_movimentacao, item, quantidade, unidade, localizacao, projeto_motivo, retirado_por, usuario_sistema)
                                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-                                        """, ('BAIXA', item["item"], item_qtd, item.get('unidade', 'UN'), item["localizacao"], destino_baixa, destino_baixa, usuario_atual))
+                                        """, ('BAIXA', item["item"], item["quantidade"], item.get('unidade', 'UN'), item["localizacao"], destino_baixa, destino_baixa, usuario_atual))
                                         
                                     conn.commit()
                                     cursor.close()
                                     conn.close()
-
                                     st.success("Baixa realizada com sucesso!")
                                     st.session_state["carrinho_baixa"] = []
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Erro ao processar baixa: {e}")
         except Exception as e:
-            st.error(f"Erro ao carregar dados para baixa: {e}")
+            st.error(f"Erro: {e}")
 
     # ---------------------------------------------------------
-    # TAB 3: LANÇAMENTO MANUAL
+    # TAB 4: LANÇAMENTO MANUAL
     # ---------------------------------------------------------
-    with tab3:
+    with tab4:
         st.subheader("Lançamento Manual de Entrada")
-        
         try:
             conn_temp = db.get_db_connection()
             df_max = pd.read_sql("SELECT MAX(id) as max_id FROM estoque;", conn_temp)
@@ -248,12 +395,11 @@ def render(perfil_atual):
                 proj_man = st.text_input("Projeto de Destino", value="GERAL / ALMOXARIFADO").strip()
             
             fornecedor_man = st.text_input("Fornecedor", value="Diversos").strip()
-            
             btn_salvar_manual = st.form_submit_button("💾 Salvar Entrada Manual", type="primary", use_container_width=True)
             
             if btn_salvar_manual:
                 if not cod_man or not desc_man or qtd_man <= 0:
-                    st.warning("Preencha o código, o item/descrição e uma quantidade válida.")
+                    st.warning("Preencha o código, a descrição e uma quantidade válida.")
                 else:
                     try:
                         conn = db.get_db_connection()
@@ -262,15 +408,11 @@ def render(perfil_atual):
                         existe = cursor.fetchone()
                         
                         loc_inicial = f"Projeto: {proj_man} - (A Endereçar)"
-                        usuario_atual = st.session_state.get("usuario_logado", "Sistema")
+                        usuario_atual = st.session_state.get("user_token", "Sistema")
                         
                         if existe:
                             cursor.execute("""
-                                UPDATE estoque 
-                                SET quantidade = quantidade + %s, 
-                                    preco_unitario = %s, 
-                                    ultimo_fornecedor = %s,
-                                    localizacao = %s
+                                UPDATE estoque SET quantidade = quantidade + %s, preco_unitario = %s, ultimo_fornecedor = %s, localizacao = %s
                                 WHERE codigo = %s;
                             """, (float(qtd_man), float(preco_man), fornecedor_man, loc_inicial, cod_man))
                         else:
@@ -287,16 +429,16 @@ def render(perfil_atual):
                         conn.commit()
                         cursor.close()
                         conn.close()
-                        st.success("Entrada manual registrada com sucesso! O item foi enviado para a aba de Endereçamento.")
+                        st.success("Entrada manual registrada! O item foi enviado para a aba de Endereçamento.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao salvar lançamento manual: {e}")
 
     # ---------------------------------------------------------
-    # TAB 4: ENTRADA POR XML
+    # TAB 5: ENTRADA POR XML
     # ---------------------------------------------------------
-    with tab4:
-        st.subheader("Entrada Automatizada via XML de Nota Fiscal (NF-e)")
+    with tab5:
+        st.subheader("Entrada Automatizada via XML de Nota Fiscal (NF-e) — Setor Fiscal")
         
         if "limpar_xml" not in st.session_state:
             st.session_state["limpar_xml"] = False
@@ -313,7 +455,6 @@ def render(perfil_atual):
                 bytes_xml = arquivo_xml.read()
                 tree = ET.parse(io.BytesIO(bytes_xml))
                 root = tree.getroot()
-                
                 ns = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
                 
                 emit = root.find('.//nfe:emit', ns)
@@ -334,12 +475,8 @@ def render(perfil_atual):
                         valor_unit = float(prod.find('nfe:vUnCom', ns).text) if prod.find('nfe:vUnCom', ns) is not None else 0.0
                         
                         lista_produtos.append({
-                            "codigo": codigo,
-                            "descricao": descricao,
-                            "quantidade": quantidade,
-                            "unidade": unidade,
-                            "preco_unitario": valor_unit,
-                            "fornecedor": nome_fornecedor
+                            "codigo": codigo, "descricao": descricao, "quantidade": quantidade,
+                            "unidade": unidade, "preco_unitario": valor_unit, "fornecedor": nome_fornecedor
                         })
                 
                 df_xml = pd.DataFrame(lista_produtos)
@@ -347,14 +484,13 @@ def render(perfil_atual):
                 
                 with st.form("form_xml_entrada"):
                     projeto_destino = st.text_input("Projeto de Destino para os Itens", value="GERAL / ALMOXARIFADO")
-                    
-                    btn_confirma_xml = st.form_submit_button("Confirmar Importação e Enviar para A Endereçar", type="primary")
+                    btn_confirma_xml = st.form_submit_button("Confirmar Importação Fiscal e Enviar para A Endereçar", type="primary")
                     
                     if btn_confirma_xml:
                         try:
                             conn = db.get_db_connection()
                             cursor = conn.cursor()
-                            usuario_atual = st.session_state.get("usuario_logado", "Sistema")
+                            usuario_atual = st.session_state.get("user_token", "Sistema")
                             
                             for item in lista_produtos:
                                 loc_recebido = f"Projeto: {projeto_destino} - (A Endereçar)"
@@ -366,11 +502,7 @@ def render(perfil_atual):
                                 
                                 if existe:
                                     cursor.execute("""
-                                        UPDATE estoque 
-                                        SET quantidade = quantidade + %s, 
-                                            preco_unitario = %s, 
-                                            ultimo_fornecedor = %s,
-                                            localizacao = %s
+                                        UPDATE estoque SET quantidade = quantidade + %s, preco_unitario = %s, ultimo_fornecedor = %s, localizacao = %s
                                         WHERE codigo = %s;
                                     """, (item_qtd, item_preco, item["fornecedor"], loc_recebido, item["codigo"]))
                                 else:
@@ -387,29 +519,22 @@ def render(perfil_atual):
                             conn.commit()
                             cursor.close()
                             conn.close()
-                            
                             st.session_state["limpar_xml"] = True
-                            st.success("Nota Fiscal importada com sucesso! Os itens já aparecem na aba 'Materiais Recebidos / A Endereçar' do Almoxarifado.")
+                            st.success("Nota Fiscal importada com sucesso! Os itens já aparecem na aba de Endereçamento do Almoxarifado.")
                             st.rerun()
                         except Exception as ex_db:
                             st.error(f"Erro ao salvar no banco de dados: {ex_db}")
-                            
             except Exception as e:
-                st.error(f"Erro ao ler o arquivo XML. Verifique se o formato é uma NF-e válida: {e}")
+                st.error(f"Erro ao ler o arquivo XML: {e}")
 
     # ---------------------------------------------------------
-    # TAB 5: TRANSFERÊNCIA DE SALDO
+    # TAB 6: TRANSFERÊNCIA DE SALDO
     # ---------------------------------------------------------
-    with tab5:
-        st.subheader("Transferência de Saldo entre Projetos")
+    with tab6:
+        st.subheader("Transferência de Saldo entre Projetos / Localizações")
         try:
             conn = db.get_db_connection()
-            df_cols = pd.read_sql("SELECT column_name FROM information_schema.columns WHERE table_name = 'estoque';", conn)
-            cols = df_cols['column_name'].tolist()
-            col_desc = "item" if "item" in cols else ("descricao" if "descricao" in cols else "nome")
-            
-            query = f"SELECT id, codigo, {col_desc} as item, quantidade, unidade, localizacao FROM estoque WHERE quantidade > 0;"
-            df_trans = pd.read_sql(query, conn)
+            df_trans = pd.read_sql("SELECT id, codigo, item, quantidade, unidade, localizacao FROM estoque WHERE quantidade > 0;", conn)
             conn.close()
 
             if df_trans.empty:
@@ -421,9 +546,8 @@ def render(perfil_atual):
                         options=df_trans.index,
                         format_func=lambda x: f"{df_trans.loc[x, 'codigo']} - {df_trans.loc[x, 'item']} (Qtd: {df_trans.loc[x, 'quantidade']} | Loc: {df_trans.loc[x, 'localizacao']})"
                     )
-                    
                     qtd_trans = st.number_input("Quantidade a Transferir", min_value=0.01, step=1.0)
-                    novo_projeto = st.text_input("Novo Projeto de Destino *").strip()
+                    novo_projeto = st.text_input("Novo Projeto / Destino *").strip()
                     
                     btn_exec_trans = st.form_submit_button("🔄 Efetuar Transferência", type="primary", use_container_width=True)
                     
@@ -433,18 +557,15 @@ def render(perfil_atual):
                         else:
                             it = df_trans.loc[item_trans_idx]
                             item_qtd_trans = float(qtd_trans)
-                            item_id = int(it['id'])
-                            
                             if item_qtd_trans > float(it['quantidade']):
-                                st.error("Quantidade para transferência superior ao saldo atual do item.")
+                                st.error("Quantidade superior ao saldo atual.")
                             else:
                                 try:
                                     conn = db.get_db_connection()
                                     cursor = conn.cursor()
-                                    usuario_atual = st.session_state.get("usuario_logado", "Sistema")
+                                    usuario_atual = st.session_state.get("user_token", "Sistema")
                                     
-                                    cursor.execute("UPDATE estoque SET quantidade = quantidade - %s WHERE id = %s;", (item_qtd_trans, item_id))
-                                    
+                                    cursor.execute("UPDATE estoque SET quantidade = quantidade - %s WHERE id = %s;", (item_qtd_trans, int(it['id'])))
                                     loc_novo = f"Projeto: {novo_projeto}"
                                     cursor.execute("""
                                         INSERT INTO estoque (codigo, item, quantidade, unidade, preco_unitario, ultimo_fornecedor, localizacao)
@@ -459,21 +580,19 @@ def render(perfil_atual):
                                     conn.commit()
                                     cursor.close()
                                     conn.close()
-                                    
                                     st.success("Transferência realizada com sucesso!")
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Erro ao executar transferência: {e}")
         except Exception as e:
-            st.error(f"Erro ao carregar dados para transferência: {e}")
+            st.error(f"Erro: {e}")
 
     # ---------------------------------------------------------
-    # TAB 6: ESTORNO E HISTÓRICO DE MOVIMENTAÇÕES (RESTRITO PARA GESTÃO)
+    # TAB 7: ESTORNO E HISTÓRICO DE MOVIMENTAÇÕES
     # ---------------------------------------------------------
-    with tab6:
+    with tab7:
         st.subheader("⚠️ Painel de Estorno e Histórico de Movimentações")
-        
-        is_gestao = perfil_atual in ["Gestão Geral", "Gestor"] or st.session_state.get("permissoes", {}).get("e_admin", False)
+        is_gestao = perfil_atual in ["Gestão Geral", "Gestor", "Administrador"] or is_admin
 
         try:
             conn = db.get_db_connection()
@@ -491,13 +610,9 @@ def render(perfil_atual):
                     st.warning("Atenção: O estorno anula a movimentação e reverte os saldos no estoque.")
 
                     with st.form("form_estorno"):
-                        dict_hist = {
-                            f"ID {r['id']} | [{r['tipo_movimentacao']}] {r['item']} - Qtd: {r['quantidade']} ({r['data_movimentacao']})": r
-                            for _, r in df_hist.iterrows()
-                        }
-                        
+                        dict_hist = {f"ID {r['id']} | [{r['tipo_movimentacao']}] {r['item']} - Qtd: {r['quantidade']} ({r['data_movimentacao']})": r for _, r in df_hist.iterrows()}
                         item_estornar_str = st.selectbox("Selecione a movimentação para estornar", options=list(dict_hist.keys()))
-                        motivo_estorno = st.text_input("Motivo do Estorno *", placeholder="Ex: Erro de digitação na nota")
+                        motivo_estorno = st.text_input("Motivo do Estorno *", placeholder="Ex: Erro de digitação")
                         
                         btn_exec_estorno = st.form_submit_button("⚠️ Confirmar Estorno da Movimentação", type="primary")
                         
@@ -511,24 +626,16 @@ def render(perfil_atual):
                                 nome_item = reg['item']
                                 qtd_mov = float(reg['quantidade'])
                                 loc_mov = reg['localizacao']
-                                usuario_atual = st.session_state.get("usuario_logado", "Sistema")
+                                usuario_atual = st.session_state.get("user_token", "Sistema")
                                 
                                 try:
                                     conn_est = db.get_db_connection()
                                     cur_est = conn_est.cursor()
                                     
                                     if tipo_mov in ['ENTRADA MANUAL', 'ENTRADA XML', 'ENDEREÇAMENTO']:
-                                        cur_est.execute("""
-                                            UPDATE estoque 
-                                            SET quantidade = quantidade - %s 
-                                            WHERE item ILIKE %s AND quantidade >= %s;
-                                        """, (qtd_mov, nome_item, qtd_mov))
+                                        cur_est.execute("UPDATE estoque SET quantidade = quantidade - %s WHERE item ILIKE %s AND quantidade >= %s;", (qtd_mov, nome_item, qtd_mov))
                                     elif tipo_mov == 'BAIXA':
-                                        cur_est.execute("""
-                                            UPDATE estoque 
-                                            SET quantidade = quantidade + %s 
-                                            WHERE item ILIKE %s;
-                                        """, (qtd_mov, nome_item))
+                                        cur_est.execute("UPDATE estoque SET quantidade = quantidade + %s WHERE item ILIKE %s;", (qtd_mov, nome_item))
                                         
                                     cur_est.execute("""
                                         INSERT INTO historico_estoque (tipo_movimentacao, item, quantidade, unidade, localizacao, projeto_motivo, retirado_por, usuario_sistema)
@@ -538,12 +645,11 @@ def render(perfil_atual):
                                     conn_est.commit()
                                     cur_est.close()
                                     conn_est.close()
-                                    
-                                    st.success(f"Movimentação estornada com sucesso! Saldos revertidos.")
+                                    st.success("Movimentação estornada com sucesso!")
                                     st.rerun()
                                 except Exception as err_est:
                                     st.error(f"Erro ao processar estorno: {err_est}")
                 else:
-                    st.info("🔒 A visualização do histórico está liberada, mas a função de **Estorno** é restrita aos perfis de Gestão Geral e Gestores.")
+                    st.info("🔒 A função de estorno é restrita aos perfis de Gestão e Administração.")
         except Exception:
             st.info("Tabela de histórico de movimentações ainda não inicializada ou vazia.")
