@@ -5,7 +5,6 @@ from database import get_db_connection, obter_opcoes_destino
 def render_modulo_compras():
     st.header("Módulo de Compras")
     
-    # Identifica o perfil do usuário logado para restrição de visitante
     user_token = st.session_state.get("user_token", "admin")
     conn = get_db_connection()
     try:
@@ -176,11 +175,10 @@ def render_modulo_compras():
                     default_f3 = df_itens_cot["f3_nome"].iloc[0] if not df_itens_cot.empty and df_itens_cot["f3_nome"].iloc[0] else ""
                     default_p3 = int(df_itens_cot["f3_prazo"].iloc[0]) if not df_itens_cot.empty and df_itens_cot["f3_prazo"].iloc[0] else 0
                     default_fr3 = float(df_itens_cot["f3_frete"].iloc[0]) if not df_itens_cot.empty and df_itens_cot["f3_frete"].iloc[0] else 0.0
-                    default_cond = df_itens_cot["condicao_pagamento"].iloc[0] if not df_itens_cot.empty and df_itens_cot["condicao_pagamento"].iloc[0] else "30 dias"
                     
                     col_cond1, col_cond2 = st.columns(2)
                     with col_cond1:
-                        condicao_pgto = st.selectbox("Condição de Pagamento *", options=["À vista", "15 dias", "30 dias", "30 / 60 dias", "30 / 60 / 90 dias", "Outros"], index=2, key=f"cond_{sc_selecionada}")
+                        condicao_pagamento = st.selectbox("Condição de Pagamento *", options=["À vista", "15 dias", "30 dias", "30 / 60 dias", "30 / 60 / 90 dias", "Outros"], index=2, key=f"cond_{sc_selecionada}")
                     
                     col_f1, col_f2, col_f3 = st.columns(3)
                     with col_f1:
@@ -367,9 +365,21 @@ def render_modulo_compras():
                                     try:
                                         cursor = conn.cursor()
                                         cursor.execute("UPDATE compras SET status = 'Aprovado - Pronto para Emitir Pedido' WHERE numero_sc = %s AND status = 'Aguardando Aprovação Gerente Geral';", (sc_row['numero_sc'],))
+                                        
+                                        # Integração automática com o almoxarifado ("A Chegar")
+                                        cursor.execute("SELECT projeto, item, quantidade, unidade, fornecedor_escolhido, preco_escolhido FROM compras WHERE numero_sc = %s AND status = 'Aprovado - Pronto para Emitir Pedido';", (sc_row['numero_sc'],))
+                                        itens_aprovados = cursor.fetchall()
+                                        
+                                        for proj, itm, qtd, und, forn, preco in itens_aprovados:
+                                            loc_trand = f"Projeto: {proj} - (A Chegar)"
+                                            cursor.execute("""
+                                                INSERT INTO estoque (codigo, item, quantidade, unidade, preco_unitario, ultimo_fornecedor, localizacao)
+                                                VALUES (%s, %s, %s, %s, %s, %s, %s);
+                                            """, (f"SC-{sc_row['numero_sc']:04d}", itm, qtd, und, preco, forn, loc_trand))
+                                            
                                         conn.commit()
                                         cursor.close()
-                                        st.success(f"SC #{sc_row['numero_sc']:04d} aprovada no Nível 2 com sucesso!")
+                                        st.success(f"SC #{sc_row['numero_sc']:04d} aprovada no Nível 2 e enviada para 'A Chegar' no almoxarifado!")
                                         st.rerun()
                                     except Exception as e:
                                         conn.rollback()
@@ -419,7 +429,7 @@ def render_modulo_compras():
                                 data_ped = pd.to_datetime(df_itens_po["data_pedido"].iloc[0]).strftime("%d/%m/%Y")
                                 cond_pgto = df_itens_po["condicao_pagamento"].iloc[0]
                                 
-                                # Numeração do PO começando estritamente do 01 (utilizando o ID ou número formatado da SC)
+                                # Numeração do PO começando estritamente em 01 (utilizando formato de 2 dígitos)
                                 po_numero_formatado = f"{sc_po:02d}"
                                 
                                 cnpj_emitente = "45.123.789/0001-99"
@@ -551,7 +561,6 @@ def render_modulo_compras():
             except Exception as e:
                 st.error(f"Erro: {e}")
 
-    # Aba de Materiais a Receber (Disponível para todos, inclusive Visitantes para consulta de trânsito)
     aba_receber_idx = 0 if is_visitante else 6
     with abas[aba_receber_idx]:
         st.subheader("Materiais a Receber (Trânsito Logístico de POs)")
