@@ -1,9 +1,10 @@
 import os
 import sys
 import streamlit as st
+import inspect
 
 st.set_page_config(
-    page_title="Portal Delta - Suprimentos & Estoque",
+    page_title="Portal - Suprimentos & Estoque",
     page_icon="logo_delta.png",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -196,6 +197,44 @@ def tela_login():
 
 
 # ---------------------------------------------------------
+# EXECUTOR DINÂMICO DE MÓDULOS (BLINDAGEM TOTAL)
+# ---------------------------------------------------------
+def executar_modulo(modulo, perfil):
+    if not modulo:
+        st.error("Módulo não encontrado.")
+        return
+
+    # Procura por nomes comuns de função de entrada
+    for nome_func in ['render', 'main', 'run', 'app', 'exibir', 'tela_compras']:
+        if hasattr(modulo, nome_func):
+            func = getattr(modulo, nome_func)
+            try:
+                func(perfil)
+                return
+            except TypeError:
+                try:
+                    func()
+                    return
+                except Exception:
+                    pass
+
+    # Fallback: pega a primeira função pública disponível no arquivo
+    funcs = [o for o in inspect.getmembers(modulo, inspect.isfunction) if not o[0].startswith('_')]
+    if funcs:
+        try:
+            funcs[0][1](perfil)
+            return
+        except TypeError:
+            try:
+                funcs[0][1]()
+                return
+            except Exception:
+                pass
+
+    st.error("O arquivo foi carregado, mas nenhuma função de execução válida foi identificada.")
+
+
+# ---------------------------------------------------------
 # PAINEL PRINCIPAL & NAVEGAÇÃO
 # ---------------------------------------------------------
 def painel_principal():
@@ -241,52 +280,23 @@ def painel_principal():
             st.query_params.clear()
             st.rerun()
 
-    # Roteamento ultra flexível para os Módulos
+    # Roteamento dinâmico blindado
     if modulo_sel == "🛒 Módulo de Compras":
-        if compras:
-            if hasattr(compras, 'render'):
-                try:
-                    compras.render(perfil_atual)
-                except TypeError:
-                    compras.render()
-            elif hasattr(compras, 'main'):
-                compras.main()
-            else:
-                st.error("O arquivo 'compras_modulo.py' foi carregado, mas nenhuma função de renderização foi encontrada.")
-        else:
-            st.error("O módulo de compras não foi encontrado na pasta 'modulos'.")
-
+        executar_modulo(compras, perfil_atual)
     elif modulo_sel == "📊 Saving & Projetos":
         if perfil_atual == "Gestão Geral":
-            if saving_projetos and hasattr(saving_projetos, 'render'):
-                saving_projetos.render(perfil_atual)
-            else:
-                st.error("O módulo de saving não foi encontrado.")
+            executar_modulo(saving_projetos, perfil_atual)
         else:
             st.error("Acesso não autorizado.")
-
     elif modulo_sel == "📦 Controle de Estoque":
-        if estoque and hasattr(estoque, 'render'):
-            estoque.render(perfil_atual)
-        else:
-            st.error("O módulo de estoque não foi encontrado.")
-
+        executar_modulo(estoque, perfil_atual)
     elif modulo_sel == "📍 Endereçamento (Almoxarifado)":
-        if estoque:
-            if hasattr(estoque, 'render_enderecamento'):
-                estoque.render_enderecamento()
-            elif hasattr(estoque, 'render'):
-                estoque.render(perfil_atual)
-            else:
-                st.error("Função de endereçamento não encontrada no estoque.")
+        if estoque and hasattr(estoque, 'render_enderecamento'):
+            estoque.render_enderecamento()
         else:
-            st.error("O módulo de estoque não foi encontrado.")
-
+            executar_modulo(estoque, perfil_atual)
     elif modulo_sel == "⚙️ Configurações":
-        if configuracoes and hasattr(configuracoes, 'render'):
-            configuracoes.render(perfil_atual)
-        else:
-            st.error("O módulo de configurações não foi encontrado.")
+        executar_modulo(configuracoes, perfil_atual)
 
 
 # ---------------------------------------------------------
