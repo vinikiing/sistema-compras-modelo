@@ -5,7 +5,11 @@ from database import get_db_connection, obter_opcoes_destino
 def render_modulo_compras():
     st.header("Módulo de Compras")
     
-    user_token = st.session_state.get("user_token", "admin")
+    # Identifica o usuário logado com segurança
+    user_token = st.session_state.get("usuario_logado", st.session_state.get("user_token", "admin"))
+    if not user_token:
+        user_token = "admin"
+
     conn = get_db_connection()
     try:
         df_user = pd.read_sql_query("SELECT perfil FROM usuarios WHERE username = %s", conn, params=(user_token,))
@@ -65,14 +69,23 @@ def render_modulo_compras():
             if st.session_state["carrinho_sc"]:
                 st.markdown("### Itens no Lote da SC Atual:")
                 df_carrinho = pd.DataFrame(st.session_state["carrinho_sc"])
-                st.dataframe(df_carrinho, use_container_width=True)
                 
-                solicitante = st.text_input("Nome do Solicitante *", value=user_token)
+                # Configuração de alinhamento da tabela (Centralizado, exceto descrições)
+                col_configs = {
+                    col: st.column_config.Column(alignment="center") 
+                    for col in df_carrinho.columns if col not in ['item', 'fornecedor_sugerido', 'projeto']
+                }
+                for col in ['item', 'fornecedor_sugerido', 'projeto']:
+                    if col in df_carrinho.columns:
+                        col_configs[col] = st.column_config.Column(alignment="left")
+
+                st.dataframe(df_carrinho, column_config=col_configs, use_container_width=True)
                 
-                if st.button("Emitir Solicitação de Compra (Gerar SC)", type="primary"):
-                    if not solicitante:
-                        st.error("Preencha o nome do solicitante.")
-                    else:
+                st.info(f"👤 **Solicitante vinculado automaticamente:** `{user_token}`")
+                
+                col_btn_sc1, col_btn_sc2 = st.columns(2)
+                with col_btn_sc1:
+                    if st.button("Emitir Solicitação de Compra (Gerar SC)", type="primary", use_container_width=True):
                         try:
                             cursor = conn.cursor()
                             cursor.execute("SELECT COALESCE(MAX(numero_sc), 0) + 1 FROM compras;")
@@ -82,7 +95,7 @@ def render_modulo_compras():
                                 cursor.execute("""
                                     INSERT INTO compras (numero_sc, projeto, item, quantidade, unidade, fornecedor_sugerido, status, solicitante, cotacao_concluida)
                                     VALUES (%s, %s, %s, %s, %s, %s, 'Pendente Aprovação Gestor', %s, FALSE);
-                                """, (novo_numero_sc, row["projeto"], row["item"], row["quantidade"], row["unidade"], row["fornecedor_sugerido"], solicitante))
+                                """, (novo_numero_sc, row["projeto"], row["item"], row["quantidade"], row["unidade"], row["fornecedor_sugerido"], user_token))
                                 
                             conn.commit()
                             cursor.close()
@@ -93,9 +106,10 @@ def render_modulo_compras():
                             conn.rollback()
                             st.error(f"Erro ao salvar SC: {e}")
                             
-                if st.button("Limpar Lote"):
-                    st.session_state["carrinho_sc"] = []
-                    st.rerun()
+                with col_btn_sc2:
+                    if st.button("Limpar Lote", use_container_width=True):
+                        st.session_state["carrinho_sc"] = []
+                        st.rerun()
 
         with abas[1]:
             st.subheader("Aprovação Inicial - Gestor da Área (Por SC)")
@@ -429,7 +443,7 @@ def render_modulo_compras():
                                 data_ped = pd.to_datetime(df_itens_po["data_pedido"].iloc[0]).strftime("%d/%m/%Y")
                                 cond_pgto = df_itens_po["condicao_pagamento"].iloc[0]
                                 
-                                # Numeração do PO começando estritamente em 01 (utilizando formato de 2 dígitos)
+                                # Numeração do PO começando estritamente em 01
                                 po_numero_formatado = f"{sc_po:02d}"
                                 
                                 cnpj_emitente = "45.123.789/0001-99"
