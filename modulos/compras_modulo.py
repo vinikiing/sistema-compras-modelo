@@ -80,6 +80,19 @@ def render_modulo_compras():
 
                 st.dataframe(df_carrinho, column_config=col_configs, use_container_width=True)
                 
+                # Opção para remover item específico do carrinho antes de emitir a SC
+                with st.expander("🗑️ Remover item incorreto do lote atual"):
+                    item_idx_remover = st.selectbox(
+                        "Selecione o item para remover do lote:",
+                        options=range(len(st.session_state["carrinho_sc"])),
+                        format_func=lambda i: f"{st.session_state['carrinho_sc'][i]['item']} ({st.session_state['carrinho_sc'][i]['quantidade']} {st.session_state['carrinho_sc'][i]['unidade']})"
+                    )
+                    if st.button("Remover Item Selecionado do Lote", type="secondary"):
+                        removido = st.session_state["carrinho_sc"].pop(item_idx_remover)
+                        st.success(f"Item '{removido['item']}' removido do lote com sucesso!")
+                        st.rerun()
+
+                st.markdown("---")
                 st.info(f"👤 **Solicitante Vinculado (Automático):** `{user_token}` (Imutável)")
                 
                 col_btn_sc1, col_btn_sc2 = st.columns(2)
@@ -175,6 +188,34 @@ def render_modulo_compras():
                         conn, params=(sc_selecionada,)
                     )
                     
+                    if not df_itens_cot.empty:
+                        with st.expander("🗑️ Excluir item incorreto desta SC"):
+                            item_para_deletar = st.selectbox(
+                                "Selecione o item para excluir permanentemente:",
+                                options=df_itens_cot["id"].tolist(),
+                                format_func=lambda x: f"ID {x} - {df_itens_cot.loc[df_itens_cot['id'] == x, 'item'].values[0]}"
+                            )
+                            if st.button("Confirmar Exclusão deste Item", type="secondary"):
+                                try:
+                                    cursor = conn.cursor()
+                                    cursor.execute("DELETE FROM compras WHERE id = %s;", (item_para_deletar,))
+                                    conn.commit()
+                                    cursor.close()
+                                    st.success(f"Item ID {item_para_deletar} excluído com sucesso!")
+                                    st.rerun()
+                                except Exception as ex:
+                                    conn.rollback()
+                                    st.error(f"Erro ao excluir item: {ex}")
+
+                    df_itens_cot = pd.read_sql_query(
+                        "SELECT id, item, quantidade, unidade, f1_nome, f1_preco, f1_prazo, f1_frete, f2_nome, f2_preco, f2_prazo, f2_frete, f3_nome, f3_preco, f3_prazo, f3_frete, condicao_pagamento FROM compras WHERE numero_sc = %s AND cotacao_concluida = FALSE", 
+                        conn, params=(sc_selecionada,)
+                    )
+                    
+                    if df_itens_cot.empty:
+                        st.info("Todos os itens desta SC foram removidos ou processados.")
+                        st.rerun()
+
                     st.markdown(f"**Condições Comerciais e Propostas dos 3 Fornecedores da SC #{sc_selecionada:04d}:**")
                     
                     default_f1 = df_itens_cot["f1_nome"].iloc[0] if not df_itens_cot.empty and df_itens_cot["f1_nome"].iloc[0] else ""
