@@ -16,7 +16,7 @@ if ROOT_DIR not in sys.path:
 import database as db
 
 # Importação direta dos módulos da raiz do projeto
-import compras
+import modulo_compras
 import saving_projetos
 import estoque
 import almoxarife
