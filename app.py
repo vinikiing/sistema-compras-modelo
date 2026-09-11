@@ -52,6 +52,10 @@ if "perfil" not in st.session_state:
 if "permissoes" not in st.session_state:
     st.session_state["permissoes"] = {}
 
+# Estado global para controlar a página ativa unificada
+if "pagina_ativa" not in st.session_state:
+    st.session_state["pagina_ativa"] = "🛒 Compras"
+
 
 # ---------------------------------------------------------
 # AUTO-RECOVERY DA SESSÃO VIA URL (EVITA LOGOUT NO RAILWAY)
@@ -260,7 +264,7 @@ def executar_modulo(modulo, perfil):
 
 
 # ---------------------------------------------------------
-# PAINEL PRINCIPAL & NAVEGAÇÃO
+# PAINEL PRINCIPAL & NAVEGAÇÃO UNIFICADA
 # ---------------------------------------------------------
 def painel_principal():
     perfil_atual = st.session_state["perfil"]
@@ -276,18 +280,27 @@ def painel_principal():
         st.caption("Strategic Sourcing")
         st.divider()
 
-        st.markdown("### Navegação do Sistema")
+        # Navegação unificada com botões limpos (igual ao Portal Delta)
+        st.markdown("##### 🧭 Navegação")
 
-        opcoes_menu = ["🛒 Compras", "📦 Estoque"]
-        
         if perfil_atual == "Gestão Geral":
-            opcoes_menu.insert(0, "📊 Saving & Projetos")
+            if st.button("📊 Saving & Projetos", use_container_width=True, type="primary" if st.session_state["pagina_ativa"] == "📊 Saving & Projetos" else "secondary"):
+                st.session_state["pagina_ativa"] = "📊 Saving & Projetos"
+                st.rerun()
 
-        opcoes_menu.append("⚙️ Configurações")
+        if st.button("🛒 Compras", use_container_width=True, type="primary" if st.session_state["pagina_ativa"] == "🛒 Compras" else "secondary"):
+            st.session_state["pagina_ativa"] = "🛒 Compras"
+            st.rerun()
 
-        modulo_sel = st.radio("Selecione o Módulo:", opcoes_menu, label_visibility="collapsed")
+        if st.button("📦 Estoque", use_container_width=True, type="primary" if st.session_state["pagina_ativa"] == "📦 Estoque" else "secondary"):
+            st.session_state["pagina_ativa"] = "📦 Estoque"
+            st.rerun()
 
-        st.markdown("<br>" * 8, unsafe_allow_html=True)
+        if st.button("⚙️ Configurações", use_container_width=True, type="primary" if st.session_state["pagina_ativa"] == "⚙️ Configurações" else "secondary"):
+            st.session_state["pagina_ativa"] = "⚙️ Configurações"
+            st.rerun()
+
+        st.markdown("<br>" * 4, unsafe_allow_html=True)
         st.divider()
 
         col_avatar, col_info = st.columns([1, 3])
@@ -303,10 +316,13 @@ def painel_principal():
             st.session_state["usuario_logado"] = ""
             st.session_state["perfil"] = "Consulta"
             st.session_state["permissoes"] = {}
+            st.session_state["pagina_ativa"] = "🛒 Compras"
             st.query_params.clear()
             st.rerun()
 
-    # Roteamento dinâmico limpo e integrado
+    # Roteamento dos Módulos com base na página ativa única do session_state
+    modulo_sel = st.session_state["pagina_ativa"]
+
     if modulo_sel == "🛒 Compras":
         executar_modulo(compras, perfil_atual)
     elif modulo_sel == "📊 Saving & Projetos":
@@ -318,6 +334,8 @@ def painel_principal():
         executar_modulo(estoque, perfil_atual)
     elif modulo_sel == "⚙️ Configurações":
         executar_modulo(configuracoes, perfil_atual)
+    else:
+        executar_modulo(compras, perfil_atual)
 
 
 # ---------------------------------------------------------
