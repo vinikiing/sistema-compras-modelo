@@ -1,6 +1,7 @@
 import os
 import sys
 import inspect
+import base64
 import streamlit as st
 from PIL import Image
 
@@ -55,6 +56,18 @@ if "permissoes" not in st.session_state:
 # Estado global para controlar a página ativa unificada
 if "pagina_ativa" not in st.session_state:
     st.session_state["pagina_ativa"] = "🛒 Compras"
+
+
+# ---------------------------------------------------------
+# UTILITÁRIO: CONVERSÃO DA LOGO PARA BASE64 (USADO NOS PEDIDOS)
+# ---------------------------------------------------------
+def get_logo_base64():
+    """Converte o arquivo logo_vb.png em string Base64 para uso direto em templates HTML/PDF."""
+    path = os.path.join(ROOT_DIR, "logo_vb.png")
+    if os.path.exists(path):
+        with open(path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode("utf-8")
+    return ""
 
 
 # ---------------------------------------------------------
@@ -280,7 +293,6 @@ def painel_principal():
         st.caption("Strategic Sourcing")
         st.divider()
 
-        # Navegação unificada com botões limpos (igual ao Portal Delta)
         st.markdown("##### 🧭 Navegação")
 
         if perfil_atual == "Gestão Geral":
@@ -320,7 +332,6 @@ def painel_principal():
             st.query_params.clear()
             st.rerun()
 
-    # Roteamento dos Módulos com base na página ativa única do session_state
     modulo_sel = st.session_state["pagina_ativa"]
 
     if modulo_sel == "🛒 Compras":
