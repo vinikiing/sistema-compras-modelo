@@ -4,6 +4,15 @@ import streamlit as st
 import pandas as pd
 from database import get_db_connection, obter_opcoes_destino
 
+def get_logo_base64():
+    """Converte automaticamente a logo_vb.png da raiz do projeto para Base64."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    logo_path = os.path.join(root_dir, "logo_vb.png")
+    if os.path.exists(logo_path):
+        with open(logo_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode("utf-8")
+    return ""
+
 def render(perfil):
     st.header("Módulo de Compras")
     
@@ -476,21 +485,12 @@ def render(perfil):
                                 if st.button(f"Aprovar Definitivamente SC #{sc_row['numero_sc']:04d}", type="primary", key=f"ger_ok_{sc_row['numero_sc']}"):
                                     try:
                                         cursor = conn.cursor()
+                                        # Apenas aprova o status (a entrada no estoque agora ocorre ao gerar o PO)
                                         cursor.execute("UPDATE compras SET status = 'Aprovado - Pronto para Emitir Pedido' WHERE numero_sc = %s AND status = 'Aguardando Aprovação Gerente Geral';", (sc_row['numero_sc'],))
-                                        
-                                        cursor.execute("SELECT projeto, item, quantidade, unidade, fornecedor_escolhido, preco_escolhido FROM compras WHERE numero_sc = %s AND status = 'Aprovado - Pronto para Emitir Pedido';", (sc_row['numero_sc'],))
-                                        itens_aprovados = cursor.fetchall()
-                                        
-                                        for proj, itm, qtd, und, forn, preco in itens_aprovados:
-                                            loc_trand = f"Projeto: {proj} - (A Chegar)"
-                                            cursor.execute("""
-                                                INSERT INTO estoque (codigo, item, quantidade, unidade, preco_unitario, ultimo_fornecedor, localizacao)
-                                                VALUES (%s, %s, %s, %s, %s, %s, %s);
-                                            """, (f"SC-{sc_row['numero_sc']:04d}", itm, qtd, und, preco, forn, loc_trand))
                                         
                                         conn.commit()
                                         cursor.close()
-                                        st.success(f"SC #{sc_row['numero_sc']:04d} aprovada no Nível 2 e enviada para 'A Chegar' no almoxarifado!")
+                                        st.success(f"SC #{sc_row['numero_sc']:04d} aprovada no Nível 2! Vá na aba 'SC Aprovada/Reprovada' para gerar o Pedido de Compra.")
                                         st.rerun()
                                     except Exception as e:
                                         conn.rollback()
@@ -514,7 +514,7 @@ def render(perfil):
             st.subheader("Solicitações de Compra (SC) Aprovadas / Reprovadas")
             try:
                 df_status = pd.read_sql_query(
-                    "SELECT DISTINCT numero_sc, projeto, solicitante, status FROM compras WHERE status IN ('Aprovado - Pronto para Emitir Pedido', 'Rejeitado pelo Gestor')", 
+                    "SELECT DISTINCT numero_sc, projeto, solicitante, status FROM compras WHERE status IN ('Aprovado - Pronto para Emitir Pedido', 'Pedido Emitido - Em Trânsito', 'Rejeitado pelo Gestor')", 
                     conn
                 )
                 
@@ -526,12 +526,12 @@ def render(perfil):
                     df_aprovadas = df_status[df_status["status"] == 'Aprovado - Pronto para Emitir Pedido']
                     if not df_aprovadas.empty:
                         st.markdown("---")
-                        st.subheader("Gerar Pedido de Compra (PO) — Iniciando do 01")
+                        st.subheader("Gerar Pedido de Compra (PO) — Envio Automático para Trânsito")
                         sc_po = st.selectbox("Selecione a SC Aprovada para Gerar o Pedido", options=df_aprovadas["numero_sc"].tolist(), format_func=lambda x: f"SC #{x:04d}")
                         
                         if sc_po:
                             df_itens_po = pd.read_sql_query(
-                                "SELECT item, quantidade, unidade, fornecedor_escolhido, preco_escolhido, data_pedido, condicao_pagamento FROM compras WHERE numero_sc = %s AND status = 'Aprovado - Pronto para Emitir Pedido'",
+                                "SELECT item, quantidade, unidade, fornecedor_escolhido, preco_escolhido, data_pedido, condicao_pagamento, projeto FROM compras WHERE numero_sc = %s AND status = 'Aprovado - Pronto para Emitir Pedido'",
                                 conn, params=(sc_po,)
                             )
                             
@@ -595,14 +595,6 @@ def render(perfil):
                                 **Observações:**  
                                 Condição de Pagamento pactuada: {cond_pgto}. Entrega conforme especificado.
                                 """)
-                                
-                                def get_logo_base64():
-                                    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                                    logo_path = os.path.join(root_dir, "logo_vb.png")
-                                    if os.path.exists(logo_path):
-                                        with open(logo_path, "rb") as img_file:
-                                            return base64.b64encode(img_file.read()).decode("utf-8")
-                                    return ""
                                 
                                 logo_b64 = get_logo_base64()
                                 
@@ -685,6 +677,36 @@ def render(perfil):
                                     type="primary",
                                     key=f"download_po_btn_{sc_po}"
                                 )
+
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                
+                                # Botão para efetivar o envio automático para "Materiais Que Vão Chegar"
+                                if st.button(f"🚀 Confirmar Emissão e Enviar SC #{sc_po:04d} para Almoxarifado (A Chegar)", type="primary", key=f"btn_enviar_transito_{sc_po}"):
+                                    try:
+                                        cursor = conn.cursor()
+                                        cursor.execute("UPDATE compras SET status = 'Pedido Emitido - Em Trânsito' WHERE numero_sc = %s AND status = 'Aprovado - Pronto para Emitir Pedido';", (sc_po,))
+                                        
+                                        for _, r in df_itens_po.iterrows():
+                                            proj = r['projeto']
+                                            itm = r['item']
+                                            qtd = r['quantidade']
+                                            und = r['unidade']
+                                            preco = r['preco_escolhido']
+                                            forn = r['fornecedor_escolhido']
+                                            
+                                            loc_trand = f"Projeto: {proj} - (A Chegar)"
+                                            cursor.execute("""
+                                                INSERT INTO estoque (codigo, item, quantidade, unidade, preco_unitario, ultimo_fornecedor, localizacao)
+                                                VALUES (%s, %s, %s, %s, %s, %s, %s);
+                                            """, (f"SC-{sc_po:04d}", itm, qtd, und, preco, forn, loc_trand))
+                                        
+                                        conn.commit()
+                                        cursor.close()
+                                        st.success(f"Pedido da SC #{sc_po:04d} emitido e enviado automaticamente para 'Materiais Que Vão Chegar' no Almoxarifado!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        conn.rollback()
+                                        st.error(f"Erro ao enviar para trânsito: {e}")
             except Exception as e:
                 st.error(f"Erro: {e}")
 
@@ -694,7 +716,7 @@ def render(perfil):
         st.info("ℹ️ Esta aba exibe os pedidos aprovados aguardando chegada física. A entrada oficial no estoque definitivo ocorre posteriormente via importação de XML pelo setor fiscal.")
         try:
             df_transito = pd.read_sql_query(
-                "SELECT numero_sc, projeto, item, quantidade, unidade, fornecedor_escolhido, preco_escolhido, data_pedido, condicao_pagamento FROM compras WHERE status = 'Aprovado - Pronto para Emitir Pedido'",
+                "SELECT numero_sc, projeto, item, quantidade, unidade, fornecedor_escolhido, preco_escolhido, data_pedido, condicao_pagamento FROM compras WHERE status = 'Pedido Emitido - Em Trânsito'",
                 conn
             )
             if df_transito.empty:
