@@ -14,8 +14,24 @@ def strip_accents(text):
 def render(perfil_atual):
     st.markdown("## 📦 Controle de Estoque & Almoxarifado")
     
-    # Normaliza o perfil atual removendo acentos e deixando minúsculo (ex: "Gestão Geral" vira "gestao geral")
-    perfil_norm = strip_accents(perfil_atual)
+    # Identifica o usuário logado e busca o perfil real diretamente no banco de dados
+    user_token = st.session_state.get("usuario_logado", st.session_state.get("user_token", "admin"))
+    if not user_token:
+        user_token = "admin"
+
+    try:
+        conn_p = db.get_db_connection()
+        df_user = pd.read_sql_query("SELECT perfil FROM usuarios WHERE username = %s", conn_p, params=(user_token,))
+        conn_p.close()
+        if not df_user.empty and df_user["perfil"].iloc[0]:
+            perfil_real = str(df_user["perfil"].iloc[0])
+        else:
+            perfil_real = str(perfil_atual)
+    except Exception:
+        perfil_real = str(perfil_atual)
+
+    # Normaliza o perfil real removendo acentos e deixando minúsculo
+    perfil_norm = strip_accents(perfil_real)
     
     # Identifica permissões e perfil do usuário de forma totalmente flexível
     perm = st.session_state.get("permissoes", {})
