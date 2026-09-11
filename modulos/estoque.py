@@ -5,17 +5,27 @@ import pandas as pd
 import streamlit as st
 import xml.etree.ElementTree as ET
 import io
+import unicodedata
+
+def strip_accents(text):
+    """Remove acentos e padroniza strings para evitar erros de comparação no banco."""
+    return ''.join(c for c in unicodedata.normalize('NFD', str(text)) if unicodedata.category(c) != 'Mn').strip().lower()
 
 def render(perfil_atual):
     st.markdown("## 📦 Controle de Estoque & Almoxarifado")
     
-    # Identifica permissões e perfil do usuário
-    perm = st.session_state.get("permissoes", {})
-    is_admin = perm.get("e_admin", False) or perfil_atual in ["Administrador", "Gestão Geral", "Gestor"]
+    # Normaliza o perfil atual removendo acentos e deixando minúsculo (ex: "Gestão Geral" vira "gestao geral")
+    perfil_norm = strip_accents(perfil_atual)
     
-    # Define se o usuário tem permissão de Almoxarife / Edição
+    # Identifica permissões e perfil do usuário de forma totalmente flexível
+    perm = st.session_state.get("permissoes", {})
+    is_admin = perm.get("e_admin", False) or "admin" in perfil_norm
+    
     is_almoxarife_ou_gestao = (
-        perfil_atual in ["Almoxarife", "Gestão Geral", "Gestor", "Administrador"]
+        "almoxarife" in perfil_norm
+        or "gestao" in perfil_norm
+        or "gestor" in perfil_norm
+        or "admin" in perfil_norm
         or is_admin
         or perm.get("pode_enderecar_estoque", False)
     )
@@ -145,10 +155,10 @@ def render(perfil_atual):
 
                 st.dataframe(df_exibicao, column_config=column_configs, use_container_width=True)
 
-                # --- PAINEL DE EDIÇÃO EXCLUSIVO PARA O ALMOXARIFE / ADMIN ---
+                # --- PAINEL DE EDIÇÃO EXCLUSIVO PARA O ALMOXARIFE / GESTÃO ---
                 if is_almoxarife_ou_gestao:
                     st.markdown("---")
-                    with st.expander("✏️ Painel do Almoxarife: Editar Produtos Existentes"):
+                    with st.expander("✏️ Painel de Edição de Produtos Existentes"):
                         st.info("💡 Altere diretamente abaixo as informações dos produtos (descrição, código, quantidade, unidade, preço ou localização) e clique em salvar.")
                         
                         df_editavel = df_estoque[['id', 'codigo', 'item', 'quantidade', 'unidade', 'preco_unitario', 'localizacao', 'ultimo_fornecedor']].copy()
@@ -658,7 +668,7 @@ def render(perfil_atual):
     # ---------------------------------------------------------
     with tab7:
         st.subheader("⚠️ Painel de Estorno e Histórico de Movimentações")
-        is_gestao = perfil_atual in ["Gestão Geral", "Gestor", "Administrador"] or is_admin
+        is_gestao = "gestao" in perfil_norm or "administrador" in perfil_norm or "admin" in perfil_norm or is_admin
 
         try:
             conn = db.get_db_connection()
