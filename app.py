@@ -1,11 +1,19 @@
 import os
 import sys
 import streamlit as st
-import inspect
+from PIL import Image
+
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+# Carrega a nova logo para o Favicon da aba
+logo_path = os.path.join(ROOT_DIR, "logo_vb.png")
+favicon_img = Image.open(logo_path) if os.path.exists(logo_path) else None
 
 st.set_page_config(
-    page_title="Portal - Suprimentos & Estoque",
-    page_icon="logo_delta.png",
+    page_title="V&B Strategic Sourcing",
+    page_icon=favicon_img if favicon_img else "🔺",
     layout="wide",
     initial_sidebar_state="expanded"
 )
