@@ -12,7 +12,9 @@ def render(perfil_atual):
     # Identifica permissões e perfil do usuário
     perm = st.session_state.get("permissoes", {})
     is_admin = perm.get("e_admin", False) or perfil_atual in ["Administrador", "Gestão Geral", "Gestor"]
-    pode_guardar = (
+    
+    # Define se o usuário tem permissão de Almoxarife / Edição
+    is_almoxarife_ou_gestao = (
         perfil_atual in ["Almoxarife", "Gestão Geral", "Gestor", "Administrador"]
         or is_admin
         or perm.get("pode_enderecar_estoque", False)
@@ -112,7 +114,7 @@ def render(perfil_atual):
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(abas)
 
     # ---------------------------------------------------------
-    # TAB 1: CONSULTAR ESTOQUE
+    # TAB 1: CONSULTAR ESTOQUE E EDIÇÃO DO ALMOXARIFE
     # ---------------------------------------------------------
     with tab1:
         st.subheader("Estoque Atual de Materiais e Saldos")
@@ -120,27 +122,83 @@ def render(perfil_atual):
 
         try:
             conn = db.get_db_connection()
-            df_estoque = pd.read_sql("SELECT * FROM estoque;", conn)
+            df_estoque = pd.read_sql("SELECT * FROM estoque ORDER BY id DESC;", conn)
             conn.close()
             
             if not df_estoque.empty:
+                df_exibicao = df_estoque.copy()
                 if pesquisa:
                     termo = pesquisa.lower()
                     mask = False
                     for col in ['codigo', 'item', 'descricao', 'localizacao', 'ultimo_fornecedor']:
-                        if col in df_estoque.columns:
-                            mask = mask | df_estoque[col].astype(str).str.lower().str.contains(termo, na=False)
-                    df_estoque = df_estoque[mask]
+                        if col in df_exibicao.columns:
+                            mask = mask | df_exibicao[col].astype(str).str.lower().str.contains(termo, na=False)
+                    df_exibicao = df_exibicao[mask]
 
                 # Configura o alinhamento: Centraliza todas as colunas, exceto 'item' que fica à esquerda
                 column_configs = {
                     col: st.column_config.Column(alignment="center") 
-                    for col in df_estoque.columns if col != 'item'
+                    for col in df_exibicao.columns if col != 'item'
                 }
-                if 'item' in df_estoque.columns:
+                if 'item' in df_exibicao.columns:
                     column_configs['item'] = st.column_config.Column(alignment="left")
 
-                st.dataframe(df_estoque, column_config=column_configs, use_container_width=True)
+                st.dataframe(df_exibicao, column_config=column_configs, use_container_width=True)
+
+                # --- PAINEL DE EDIÇÃO EXCLUSIVO PARA O ALMOXARIFE / ADMIN ---
+                if is_almoxarife_ou_gestao:
+                    st.markdown("---")
+                    with st.expander("✏️ Painel do Almoxarife: Editar Produtos Existentes"):
+                        st.info("💡 Altere diretamente abaixo as informações dos produtos (descrição, código, quantidade, unidade, preço ou localização) e clique em salvar.")
+                        
+                        df_editavel = df_estoque[['id', 'codigo', 'item', 'quantidade', 'unidade', 'preco_unitario', 'localizacao', 'ultimo_fornecedor']].copy()
+                        
+                        edited_df = st.data_editor(
+                            df_editavel,
+                            column_config={
+                                "id": st.column_config.NumberColumn("ID", disabled=True),
+                                "codigo": st.column_config.TextColumn("Código"),
+                                "item": st.column_config.TextColumn("Descrição / Material"),
+                                "quantidade": st.column_config.NumberColumn("Qtd", format="%.2f"),
+                                "unidade": st.column_config.TextColumn("Un"),
+                                "preco_unitario": st.column_config.NumberColumn("Preço Unit. (R$)", format="%.2f"),
+                                "localizacao": st.column_config.TextColumn("Localização / Endereço"),
+                                "ultimo_fornecedor": st.column_config.TextColumn("Fornecedor")
+                            },
+                            hide_index=True,
+                            key="data_editor_estoque_almox"
+                        )
+                        
+                        if st.button("💾 Salvar Alterações no Estoque", type="primary"):
+                            try:
+                                conn_up = db.get_db_connection()
+                                cur_up = conn_up.cursor()
+                                
+                                for _, row in edited_df.iterrows():
+                                    cur_up.execute("""
+                                        UPDATE estoque 
+                                        SET codigo = %s, item = %s, quantidade = %s, unidade = %s, preco_unitario = %s, localizacao = %s, ultimo_fornecedor = %s
+                                        WHERE id = %s;
+                                    """, (
+                                        str(row['codigo']),
+                                        str(row['item']),
+                                        float(row['quantidade']),
+                                        str(row['unidade']),
+                                        float(row['preco_unitario']),
+                                        str(row['localizacao']),
+                                        str(row['ultimo_fornecedor']),
+                                        int(row['id'])
+                                    ))
+                                
+                                conn_up.commit()
+                                cur_up.close()
+                                conn_up.close()
+                                st.success("✅ Produtos atualizados com sucesso no sistema!")
+                                st.rerun()
+                            except Exception as err_ed:
+                                st.error(f"Erro ao salvar alterações: {err_ed}")
+                else:
+                    st.caption("🔒 O painel de edição de produtos cadastrados é restrito ao Almoxarife e Administradores.")
             else:
                 st.info("Nenhum item cadastrado no estoque atualmente.")
         except Exception as e:
@@ -179,7 +237,7 @@ def render(perfil_atual):
                     "unidade": "Un.", "localizacao": "Status / Origem", "ultimo_fornecedor": "Fornecedor", "preco_unitario": "Preço Unit."
                 }), use_container_width=True, hide_index=True)
 
-                if pode_guardar:
+                if is_almoxarife_ou_gestao:
                     st.divider()
                     col_rec, col_canc = st.columns(2)
 
@@ -248,7 +306,7 @@ def render(perfil_atual):
                 }), use_container_width=True, hide_index=True)
 
                 st.divider()
-                if pode_guardar:
+                if is_almoxarife_ou_gestao:
                     st.markdown("### 📍 Guardar Material no Endereço Físico (Em Lote)")
 
                     try:
@@ -365,7 +423,7 @@ def render(perfil_atual):
                                             INSERT INTO historico_estoque (tipo_movimentacao, item, quantidade, unidade, localizacao, projeto_motivo, retirado_por, usuario_sistema)
                                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
                                         """, ('BAIXA', item["item"], item["quantidade"], item.get('unidade', 'UN'), item["localizacao"], destino_baixa, destino_baixa, usuario_atual))
-                                        
+                                    
                                     conn.commit()
                                     cursor.close()
                                     conn.close()
