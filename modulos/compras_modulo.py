@@ -1,6 +1,17 @@
+import os
+import base64
 import streamlit as st
 import pandas as pd
 from database import get_db_connection, obter_opcoes_destino
+
+def get_logo_base64():
+    """Converte automaticamente a logo_vb.png da raiz do projeto para Base64."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    logo_path = os.path.join(root_dir, "logo_vb.png")
+    if os.path.exists(logo_path):
+        with open(logo_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode("utf-8")
+    return ""
 
 def render_modulo_compras():
     st.header("Módulo de Compras")
@@ -108,7 +119,7 @@ def render_modulo_compras():
                                     INSERT INTO compras (numero_sc, projeto, item, quantidade, unidade, fornecedor_sugerido, status, solicitante, cotacao_concluida)
                                     VALUES (%s, %s, %s, %s, %s, %s, 'Pendente Aprovação Gestor', %s, FALSE);
                                 """, (novo_numero_sc, row["projeto"], row["item"], row["quantidade"], row["unidade"], row["fornecedor_sugerido"], user_token))
-                                
+                            
                             conn.commit()
                             cursor.close()
                             st.session_state["carrinho_sc"] = []
@@ -544,7 +555,7 @@ def render_modulo_compras():
                                 cnpj_emitente = "45.123.789/0001-99"
                                 ie_emitente = "998877665"
                                 endereco_emitente = "Rodovia Central, 500, Galpão A, Distrito Industrial, São Paulo - SP"
-                                nome_comprador = "Global Comércio e Suprimentos Ltda."
+                                nome_comprador = "V&B Strategic Sourcing"
                                 
                                 cnpj_forn = "12.345.678/0001-10"
                                 end_forn = "Rua das Indústrias, 100, Centro, Belo Horizonte - MG"
@@ -595,6 +606,9 @@ def render_modulo_compras():
                                 Condição de Pagamento pactuada: {cond_pgto}. Entrega conforme especificado.
                                 """)
                                 
+                                # Obtém a logo em Base64 para embutir perfeitamente no HTML do PO
+                                logo_b64 = get_logo_base64()
+                                
                                 html_content = f"""
                                 <!DOCTYPE html>
                                 <html>
@@ -612,7 +626,14 @@ def render_modulo_compras():
                                     </style>
                                 </head>
                                 <body>
-                                    <h2>Pedido de Compra N° {po_numero_formatado}</h2>
+                                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ccc; padding-bottom: 15px; margin-bottom: 20px;">
+                                        <div>
+                                            <img src="data:image/png;base64,{logo_b64}" style="max-height: 60px; width: auto;">
+                                        </div>
+                                        <div style="text-align: right;">
+                                            <h2 style="margin: 0; color: #111;">Pedido de Compra N° {po_numero_formatado}</h2>
+                                        </div>
+                                    </div>
                                     <div class="header">
                                         <strong>Comprador:</strong> {nome_comprador}<br>
                                         CNPJ: {cnpj_emitente} | IE: {ie_emitente}<br>
