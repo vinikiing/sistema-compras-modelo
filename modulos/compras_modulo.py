@@ -4,16 +4,7 @@ import streamlit as st
 import pandas as pd
 from database import get_db_connection, obter_opcoes_destino
 
-def get_logo_base64():
-    """Converte automaticamente a logo_vb.png da raiz do projeto para Base64."""
-    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    logo_path = os.path.join(root_dir, "logo_vb.png")
-    if os.path.exists(logo_path):
-        with open(logo_path, "rb") as img_file:
-            return base64.b64encode(img_file.read()).decode("utf-8")
-    return ""
-
-def render_modulo_compras():
+def render(perfil):
     st.header("Módulo de Compras")
     
     # Identifica o usuário logado com segurança e de forma imutável
@@ -91,7 +82,6 @@ def render_modulo_compras():
 
                 st.dataframe(df_carrinho, column_config=col_configs, use_container_width=True)
                 
-                # Opção para remover item específico do carrinho antes de emitir a SC
                 with st.expander("🗑️ Remover item incorreto do lote atual"):
                     item_idx_remover = st.selectbox(
                         "Selecione o item para remover do lote:",
@@ -606,7 +596,14 @@ def render_modulo_compras():
                                 Condição de Pagamento pactuada: {cond_pgto}. Entrega conforme especificado.
                                 """)
                                 
-                                # Obtém a logo em Base64 para embutir perfeitamente no HTML do PO
+                                def get_logo_base64():
+                                    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                                    logo_path = os.path.join(root_dir, "logo_vb.png")
+                                    if os.path.exists(logo_path):
+                                        with open(logo_path, "rb") as img_file:
+                                            return base64.b64encode(img_file.read()).decode("utf-8")
+                                    return ""
+                                
                                 logo_b64 = get_logo_base64()
                                 
                                 html_content = f"""
