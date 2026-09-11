@@ -1,5 +1,6 @@
 import os
 import sys
+import inspect
 import streamlit as st
 from PIL import Image
 
@@ -7,7 +8,7 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-# Carrega a nova logo para o Favicon da aba
+# Carrega a nova logo V&B para o Favicon da aba com segurança via Pillow
 logo_path = os.path.join(ROOT_DIR, "logo_vb.png")
 favicon_img = Image.open(logo_path) if os.path.exists(logo_path) else None
 
@@ -17,10 +18,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
 
 import database as db
 
@@ -128,12 +125,13 @@ def tela_login():
         _, col_l, col_t, _ = st.columns([0.2, 0.8, 2.2, 0.2])
         
         with col_l:
-            if os.path.exists("logo_delta.png"):
-                st.image("logo_delta.png", width=70)
+            path_logo_login = os.path.join(ROOT_DIR, "logo_vb.png")
+            if os.path.exists(path_logo_login):
+                st.image(path_logo_login, width=70)
                 
         with col_t:
-            st.markdown("<h2 style='color: #38bdf8; margin: 0px; line-height: 1.1;'>Portal Delta</h2>", unsafe_allow_html=True)
-            st.markdown("<p style='color: #94a3b8; margin: 0px; font-size: 13px;'>Suprimentos & Estoque</p>", unsafe_allow_html=True)
+            st.markdown("<h2 style='color: #38bdf8; margin: 0px; line-height: 1.1;'>Portal V&B</h2>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #94a3b8; margin: 0px; font-size: 13px;'>Strategic Sourcing</p>", unsafe_allow_html=True)
         
         st.write("")
         
@@ -270,11 +268,12 @@ def painel_principal():
     with st.sidebar:
         col_img, col_txt = st.columns([1, 3])
         with col_img:
-            if os.path.exists("logo_delta.png"):
-                st.image("logo_delta.png", width=35)
+            path_logo_side = os.path.join(ROOT_DIR, "logo_vb.png")
+            if os.path.exists(path_logo_side):
+                st.image(path_logo_side, width=35)
         with col_txt:
             st.markdown("##### Portal V&B")
-        st.caption("Suprimentos & Estoque")
+        st.caption("Strategic Sourcing")
         st.divider()
 
         st.markdown("### Navegação do Sistema")
