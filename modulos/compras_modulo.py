@@ -13,12 +13,17 @@ def get_logo_base64():
             return base64.b64encode(img_file.read()).decode("utf-8")
     return ""
 
-# --- FRAGMENTOS ISOLADOS POR ABA (SEM ST.RERUN) ---
+# --- FRAGMENTOS ISOLADOS COM CONEXÃO PRÓPRIA ---
 
 @st.fragment
-def renderizar_aba_nova_solicitacao(conn, user_token):
+def renderizar_aba_nova_solicitacao(user_token):
     st.subheader("Montar Lote da Solicitação de Compra")
-    opcoes_projetos = obter_opcoes_destino(conn)
+    
+    conn = get_db_connection()
+    try:
+        opcoes_projetos = obter_opcoes_destino(conn)
+    finally:
+        conn.close()
     
     with st.form("form_add_item_sc"):
         col1, col2, col3 = st.columns(3)
@@ -75,8 +80,9 @@ def renderizar_aba_nova_solicitacao(conn, user_token):
         col_btn_sc1, col_btn_sc2 = st.columns(2)
         with col_btn_sc1:
             if st.button("Emitir Solicitação de Compra (Gerar SC)", type="primary", use_container_width=True):
+                conn_exec = get_db_connection()
                 try:
-                    cursor = conn.cursor()
+                    cursor = conn_exec.cursor()
                     cursor.execute("SELECT COALESCE(MAX(numero_sc), 0) + 1 FROM compras;")
                     novo_numero_sc = cursor.fetchone()[0]
                     
@@ -86,21 +92,24 @@ def renderizar_aba_nova_solicitacao(conn, user_token):
                             VALUES (%s, %s, %s, %s, %s, %s, 'Pendente Aprovação Gestor', %s, FALSE);
                         """, (novo_numero_sc, row["projeto"], row["item"], row["quantidade"], row["unidade"], row["fornecedor_sugerido"], user_token))
                     
-                    conn.commit()
+                    conn_exec.commit()
                     cursor.close()
                     st.session_state["carrinho_sc"] = []
                     st.success(f"Solicitação SC #{novo_numero_sc:04d} emitida com sucesso!")
                 except Exception as e:
-                    conn.rollback()
+                    conn_exec.rollback()
                     st.error(f"Erro ao salvar SC: {e}")
+                finally:
+                    conn_exec.close()
                     
         with col_btn_sc2:
             if st.button("Limpar Lote", use_container_width=True):
                 st.session_state["carrinho_sc"] = []
 
 @st.fragment
-def renderizar_aba_aprovacao_gestor(conn):
+def renderizar_aba_aprovacao_gestor():
     st.subheader("Aprovação Inicial - Gestor da Área (Por SC)")
+    conn = get_db_connection()
     try:
         df_pendentes = pd.read_sql_query(
             "SELECT DISTINCT numero_sc, projeto, solicitante, data_pedido FROM compras WHERE status = 'Pendente Aprovação Gestor'", 
@@ -143,10 +152,13 @@ def renderizar_aba_aprovacao_gestor(conn):
                                 st.error(f"Erro: {e}")
     except Exception as e:
         st.error(f"Erro: {e}")
+    finally:
+        conn.close()
 
 @st.fragment
-def renderizar_aba_cotacoes(conn):
+def renderizar_aba_cotacoes():
     st.subheader("Matriz de Cotações em Lote (Setor de Compras)")
+    conn = get_db_connection()
     try:
         df_cot = pd.read_sql_query(
             "SELECT DISTINCT numero_sc, projeto, solicitante FROM compras WHERE status = 'Aprovado pelo Gestor - Aguardando Cotação' AND cotacao_concluida = FALSE", 
@@ -357,10 +369,13 @@ def renderizar_aba_cotacoes(conn):
                         st.error(f"Erro ao salvar: {e}")
     except Exception as e:
         st.error(f"Erro: {e}")
+    finally:
+        conn.close()
 
 @st.fragment
-def renderizar_aba_escolha_gestor_nivel1(conn):
+def renderizar_aba_escolha_gestor_nivel1():
     st.subheader("Seleção do Fornecedor por Item - Aprovação Gestor Nível 1")
+    conn = get_db_connection()
     try:
         df_esc = pd.read_sql_query(
             "SELECT DISTINCT numero_sc, projeto, solicitante FROM compras WHERE status = 'Aguardando Escolha do Gestor da Área' AND cotacao_concluida = TRUE", 
@@ -419,10 +434,13 @@ def renderizar_aba_escolha_gestor_nivel1(conn):
                     st.error(f"Erro: {e}")
     except Exception as e:
         st.error(f"Erro: {e}")
+    finally:
+        conn.close()
 
 @st.fragment
-def renderizar_aba_aprovacao_nivel2(conn):
+def renderizar_aba_aprovacao_nivel2():
     st.subheader("Aprovação Nível 2 (Gerência / Diretoria)")
+    conn = get_db_connection()
     try:
         df_ger = pd.read_sql_query(
             "SELECT DISTINCT numero_sc, projeto, solicitante FROM compras WHERE status = 'Aguardando Aprovação Gerente Geral'", 
@@ -469,10 +487,13 @@ def renderizar_aba_aprovacao_nivel2(conn):
                                 st.error(f"Erro: {e}")
     except Exception as e:
         st.error(f"Erro: {e}")
+    finally:
+        conn.close()
 
 @st.fragment
-def renderizar_aba_sc_aprovada_reprovada(conn):
+def renderizar_aba_sc_aprovada_reprovada():
     st.subheader("Solicitações de Compra (SC) Aprovadas / Reprovadas")
+    conn = get_db_connection()
     try:
         df_status = pd.read_sql_query(
             "SELECT DISTINCT numero_sc, projeto, solicitante, status FROM compras WHERE status IN ('Aprovado - Pronto para Emitir Pedido', 'Pedido Emitido - Em Trânsito', 'Rejeitado pelo Gestor')", 
@@ -667,11 +688,14 @@ def renderizar_aba_sc_aprovada_reprovada(conn):
                                 st.error(f"Erro ao enviar para trânsito: {e}")
     except Exception as e:
         st.error(f"Erro: {e}")
+    finally:
+        conn.close()
 
 @st.fragment
-def renderizar_aba_materiais_a_receber(conn):
+def renderizar_aba_materiais_a_receber():
     st.subheader("Materiais a Receber (Trânsito Logístico de POs)")
     st.info("ℹ️ Esta aba exibe os pedidos aprovados aguardando chegada física. A entrada oficial no estoque definitivo ocorre posteriormente via importação de XML pelo setor fiscal.")
+    conn = get_db_connection()
     try:
         df_transito = pd.read_sql_query(
             "SELECT numero_sc, projeto, item, quantidade, unidade, fornecedor_escolhido, preco_escolhido, data_pedido, condicao_pagamento FROM compras WHERE status = 'Pedido Emitido - Em Trânsito'",
@@ -693,6 +717,8 @@ def renderizar_aba_materiais_a_receber(conn):
             }), use_container_width=True)
     except Exception as e:
         st.error(f"Erro ao carregar materiais a receber: {e}")
+    finally:
+        conn.close()
 
 # --- FUNÇÃO PRINCIPAL DE RENDERIZAÇÃO ---
 
@@ -703,12 +729,15 @@ def render(perfil):
     if not user_token:
         user_token = "admin"
 
-    conn = get_db_connection()
+    # Conexão rápida pontual apenas para validar o perfil do usuário
+    conn_usr = get_db_connection()
     try:
-        df_user = pd.read_sql_query("SELECT perfil FROM usuarios WHERE username = %s", conn, params=(user_token,))
+        df_user = pd.read_sql_query("SELECT perfil FROM usuarios WHERE username = %s", conn_usr, params=(user_token,))
         perfil_atual = df_user["perfil"].iloc[0] if not df_user.empty else "Administrador"
     except Exception:
         perfil_atual = "Administrador"
+    finally:
+        conn_usr.close()
     
     is_visitante = (perfil_atual == "Visitante")
 
@@ -730,30 +759,28 @@ def render(perfil):
     
     if not is_visitante:
         with abas[0]:
-            renderizar_aba_nova_solicitacao(conn, user_token)
+            renderizar_aba_nova_solicitacao(user_token)
 
         with abas[1]:
-            renderizar_aba_aprovacao_gestor(conn)
+            renderizar_aba_aprovacao_gestor()
 
         with abas[2]:
-            renderizar_aba_cotacoes(conn)
+            renderizar_aba_cotacoes()
 
         with abas[3]:
-            renderizar_aba_escolha_gestor_nivel1(conn)
+            renderizar_aba_escolha_gestor_nivel1()
 
         with abas[4]:
-            renderizar_aba_aprovacao_nivel2(conn)
+            renderizar_aba_aprovacao_nivel2()
 
         with abas[5]:
-            renderizar_aba_sc_aprovada_reprovada(conn)
+            renderizar_aba_sc_aprovada_reprovada()
 
         with abas[6]:
-            renderizar_aba_materiais_a_receber(conn)
+            renderizar_aba_materiais_a_receber()
     else:
         with abas[0]:
-            renderizar_aba_sc_aprovada_reprovada(conn)
+            renderizar_aba_sc_aprovada_reprovada()
 
         with abas[1]:
-            renderizar_aba_materiais_a_receber(conn)
-
-    conn.close()
+            renderizar_aba_materiais_a_receber()
