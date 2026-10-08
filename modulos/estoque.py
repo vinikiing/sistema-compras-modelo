@@ -9,8 +9,8 @@ from datetime import datetime
 @st.cache_data(ttl=10)
 def carregar_estoque_cached():
     """
-    Busca os dados do estoque do banco SQLite com cache de 10 segundos.
-    Evita leituras repetidas a cada interação e elimina o 'flicker' branco.
+    Busca os dados do estoque no SQLite mantendo em cache por 10 segundos.
+    Evita leituras repetidas e elimina o pisca-pisca / tela esbranquiçada.
     """
     conn = db.get_db_connection()
     df = pd.read_sql("SELECT * FROM estoque ORDER BY id DESC;", conn)
@@ -18,15 +18,16 @@ def carregar_estoque_cached():
     return df
 
 
-def render_controle_estoque():
+# ==========================================
+# 2. FUNÇÃO PRINCIPAL DE RENDERIZAÇÃO
+# ==========================================
+def render():
     st.title("📦 Controle de Estoque & Almoxarifado")
 
-    # ==========================================
-    # 2. LEITURA DOS DADOS (SEM RE-QUERY REPETIDA)
-    # ==========================================
+    # Leitura otimizada via cache
     df_estoque = carregar_estoque_cached()
 
-    # Cálculo dos KPIs a partir do DataFrame em cache
+    # Indicadores Topo (KPIs)
     total_skus = len(df_estoque)
     skus_zerados = len(df_estoque[df_estoque['quantidade'] <= 0]) if not df_estoque.empty else 0
     valor_total = (df_estoque['quantidade'] * df_estoque['preco_unitario']).sum() if not df_estoque.empty and 'preco_unitario' in df_estoque.columns else 0.0
@@ -38,7 +39,7 @@ def render_controle_estoque():
 
     st.markdown("---")
 
-    # Menu interno do módulo
+    # Navegação por Sub-abas
     aba = st.radio(
         "Navegação do Estoque:",
         ["Consultar Estoque", "Lançamento Manual / Entrada XML", "Dar Baixa (Carrinho)", "Transferência de Saldo"],
@@ -81,7 +82,6 @@ def render_controle_estoque():
                     conn = db.get_db_connection()
                     cursor = conn.cursor()
                     
-                    # Verifica se o SKU já existe
                     cursor.execute("SELECT id, quantidade FROM estoque WHERE codigo = ?;", (codigo,))
                     item = cursor.fetchone()
                     
@@ -100,7 +100,7 @@ def render_controle_estoque():
                     conn.commit()
                     conn.close()
 
-                    # Limpa o cache para que os dados novos apareçam sem precisar de st.rerun()
+                    # Invalida o cache para atualizar a tela sem precisar de st.rerun()
                     carregar_estoque_cached.clear()
                     st.success(f"Entrada de {quantidade} unidade(s) do item '{descricao}' salva com sucesso!")
                 else:
@@ -134,7 +134,7 @@ def render_controle_estoque():
                     conn.commit()
                     conn.close()
 
-                    # Invalida o cache para atualizar o saldo na tela imediatamente
+                    # Limpa o cache para atualizar o saldo na tela instantaneamente
                     carregar_estoque_cached.clear()
                     st.success("Baixa realizada com sucesso!")
 
@@ -143,4 +143,4 @@ def render_controle_estoque():
     # ------------------------------------------
     elif aba == "Transferência de Saldo":
         st.subheader("🔄 Transferência entre Localizações")
-        st.info("Funcionalidade operacional mantida conforme parâmetro de endereçamento.")
+        st.info("Funcionalidade mantida conforme o padrão do sistema.")
