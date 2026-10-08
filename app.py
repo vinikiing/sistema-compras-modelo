@@ -5,6 +5,7 @@ import base64
 import streamlit as st
 from PIL import Image
 
+# 1. Configuração do Diretório Raiz
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
@@ -12,6 +13,7 @@ if ROOT_DIR not in sys.path:
 logo_path = os.path.join(ROOT_DIR, "logo_vb.png")
 favicon_img = Image.open(logo_path) if os.path.exists(logo_path) else None
 
+# 2. Configuração da Página (Primeiro comando Streamlit obrigatório)
 st.set_page_config(
     page_title="V&B Strategic Sourcing",
     page_icon=favicon_img if favicon_img else "🔺",
@@ -19,8 +21,34 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# 3. CSS Global Anti-Embranquecimento (Elimina o flash branco e o efeito fantasma)
+st.markdown("""
+    <style>
+    /* Remove a redução de opacidade (efeito fantasma/transparente) durante as atualizações */
+    .stApp [data-st-mode="running"] {
+        opacity: 1 !important;
+    }
+    div[data-testid="stAppViewBlockContainer"] {
+        transition: none !important;
+    }
+    
+    /* Estilização suave para o rádio de navegação da sidebar */
+    div[data-testid="stSidebar"] div[role="radiogroup"] > label {
+        padding: 10px 14px;
+        border-radius: 8px;
+        margin-bottom: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+    div[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 import database as db
 
+# Importação dos Módulos
 try:
     from modulos import compras_modulo as compras
     from modulos import saving_projetos
@@ -35,11 +63,13 @@ except ImportError:
     except ImportError:
         compras = saving_projetos = estoque = configuracoes = None
 
+# Inicialização do Banco de Dados
 try:
     db.init_db()
 except Exception as e:
     st.error(f"Erro ao inicializar banco de dados: {e}")
 
+# Estados de Sessão
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 if "usuario_logado" not in st.session_state:
@@ -48,7 +78,6 @@ if "perfil" not in st.session_state:
     st.session_state["perfil"] = "Consulta"
 if "permissoes" not in st.session_state:
     st.session_state["permissoes"] = {}
-
 if "pagina_ativa" not in st.session_state:
     st.session_state["pagina_ativa"] = "🛒 Compras"
 
@@ -204,24 +233,35 @@ def painel_principal():
 
         st.markdown("##### 🧭 Navegação")
 
+        # Opções dinâmicas de acordo com o perfil
+        opcoes_navegacao = []
         if perfil_atual == "Gestão Geral":
-            if st.button("📊 Saving & Projetos", use_container_width=True, type="primary" if st.session_state["pagina_ativa"] == "📊 Saving & Projetos" else "secondary"):
-                st.session_state["pagina_ativa"] = "📊 Saving & Projetos"
-                st.rerun()
+            opcoes_navegacao.append("📊 Saving & Projetos")
+            
+        opcoes_navegacao.extend([
+            "🛒 Compras",
+            "📦 Controle de Estoque",
+            "⚙️ Configurações"
+        ])
 
-        if st.button("🛒 Compras", use_container_width=True, type="primary" if st.session_state["pagina_ativa"] == "🛒 Compras" else "secondary"):
-            st.session_state["pagina_ativa"] = "🛒 Compras"
-            st.rerun()
+        # Garante índice válido caso a página ativa não esteja na lista de opções do perfil
+        if st.session_state["pagina_ativa"] not in opcoes_navegacao:
+            st.session_state["pagina_ativa"] = opcoes_navegacao[0]
 
-        if st.button("📦 Controle de Estoque", use_container_width=True, type="primary" if st.session_state["pagina_ativa"] == "📦 Controle de Estoque" else "secondary"):
-            st.session_state["pagina_ativa"] = "📦 Controle de Estoque"
-            st.rerun()
+        idx_atual = opcoes_navegacao.index(st.session_state["pagina_ativa"])
 
-        if st.button("⚙️ Configurações", use_container_width=True, type="primary" if st.session_state["pagina_ativa"] == "⚙️ Configurações" else "secondary"):
-            st.session_state["pagina_ativa"] = "⚙️ Configurações"
-            st.rerun()
+        # Seleção fluida via Rádio sem forçar st.rerun manual
+        pagina_selecionada = st.radio(
+            "Navegar para:",
+            options=opcoes_navegacao,
+            index=idx_atual,
+            label_visibility="collapsed"
+        )
+        
+        # Atualiza a página ativa
+        st.session_state["pagina_ativa"] = pagina_selecionada
 
-        st.markdown("<br>" * 4, unsafe_allow_html=True)
+        st.markdown("<br>" * 2, unsafe_allow_html=True)
         st.divider()
 
         col_avatar, col_info = st.columns([1, 3])
@@ -241,6 +281,7 @@ def painel_principal():
             st.query_params.clear()
             st.rerun()
 
+    # Execução do Módulo Selecionado
     modulo_sel = st.session_state["pagina_ativa"]
 
     if modulo_sel == "🛒 Compras":
@@ -257,6 +298,7 @@ def painel_principal():
     else:
         executar_modulo(compras, perfil_atual)
 
+# Controlo de Apresentação
 if not st.session_state["logged_in"]:
     tela_login()
 else:
